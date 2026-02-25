@@ -26,6 +26,27 @@ export function erdReducer(state: ERDState, action: ERDAction): ERDState {
       };
     }
 
+    case "LOAD_FROM_DB": {
+      console.log("[ERD Reducer] LOAD_FROM_DB:", Object.keys(action.tables).length, "tables");
+      return {
+        ...initialState,
+        tables: action.tables,
+        relationships: action.relationships,
+      };
+    }
+
+    case "GENERATE_RELATIONSHIPS": {
+      // Remove all existing inferred relationships, keep manual ones
+      const manualRels = state.relationships.filter((r) => !r.inferred);
+      // Combine manual + newly inferred
+      const combined = [...manualRels, ...action.relationships];
+      return {
+        ...state,
+        tables: action.tables,
+        relationships: combined,
+      };
+    }
+
     case "MOVE_TABLE":
       return {
         ...state,

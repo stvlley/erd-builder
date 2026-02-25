@@ -9,10 +9,11 @@ interface Candidate {
 }
 
 function getColumnSuffix(name: string): string {
-  if (/^[A-Z]\d/.test(name) && name.length > 2) {
-    return name.slice(2);
+  // Strip first 2 chars if column starts with letter+digit (AS/400 style)
+  if (/^[A-Z]\d/i.test(name) && name.length > 2) {
+    return name.slice(2).toLowerCase();
   }
-  return name;
+  return name.toLowerCase();
 }
 
 function pluralize(word: string): string {
@@ -33,8 +34,7 @@ export function inferRelationships(tables: Record<string, Table>): Relationship[
   const tableList = Object.values(tables);
 
   for (let i = 0; i < tableList.length; i++) {
-    for (let j = 0; j < tableList.length; j++) {
-      if (i === j) continue;
+    for (let j = i + 1; j < tableList.length; j++) {
       const tA = tableList[i];
       const tB = tableList[j];
 
@@ -60,59 +60,114 @@ export function inferRelationships(tables: Record<string, Table>): Relationship[
               });
             }
           }
-
-          // Strategy 2: Exact column name match (0.85)
-          // Same column name across tables, PK side = from
-          if (
-            colA.name === colB.name &&
-            colA.isPrimaryKey &&
-            !colB.isPrimaryKey
-          ) {
-            candidates.push({
-              fromTableId: tA.id,
-              fromColumnId: colA.id,
-              toTableId: tB.id,
-              toColumnId: colB.id,
-              confidence: 0.85,
-            });
-          }
-
-          // Strategy 3: Legacy prefix-suffix match (0.7)
-          // AS/400 style: O0BCTN/O1BCTN share suffix BCTN
-          const suffA = getColumnSuffix(colA.name);
-          const suffB = getColumnSuffix(colB.name);
-          if (
-            suffA === suffB &&
-            suffA !== colA.name && // Ensure it actually has a prefix
-            suffB !== colB.name &&
-            colA.name !== colB.name && // Different full names
-            colA.isPrimaryKey &&
-            !colB.isPrimaryKey
-          ) {
-            // Check we haven't already matched this pair via exact match
-            const alreadyMatched = candidates.some(
-              (c) =>
-                c.fromTableId === tA.id &&
-                c.fromColumnId === colA.id &&
-                c.toTableId === tB.id &&
-                c.toColumnId === colB.id
-            );
-            if (!alreadyMatched) {
+          // Reverse direction
+          if (colB.name.toLowerCase().endsWith("_id") && !colB.isPrimaryKey) {
+            const ref = colB.name.slice(0, -3).toLowerCase();
+            const targetName = tA.name.toLowerCase();
+            if (
+              (targetName === ref ||
+                targetName === pluralize(ref) ||
+                singularize(targetName) === ref) &&
+              colA.isPrimaryKey
+            ) {
               candidates.push({
                 fromTableId: tA.id,
                 fromColumnId: colA.id,
                 toTableId: tB.id,
                 toColumnId: colB.id,
-                confidence: 0.7,
+                confidence: 0.95,
               });
+            }
+          }
+
+          // Strategy 2: Exact column name match (0.85)
+          // Same column name across different tables
+          if (colA.name === colB.name) {
+            if (colA.isPrimaryKey && !colB.isPrimaryKey) {
+              candidates.push({
+                fromTableId: tA.id,
+                fromColumnId: colA.id,
+                toTableId: tB.id,
+                toColumnId: colB.id,
+                confidence: 0.85,
+              });
+            } else if (colB.isPrimaryKey && !colA.isPrimaryKey) {
+              candidates.push({
+                fromTableId: tB.id,
+                fromColumnId: colB.id,
+                toTableId: tA.id,
+                toColumnId: colA.id,
+                confidence: 0.85,
+              });
+            } else if (!colA.isPrimaryKey && !colB.isPrimaryKey) {
+              // Neither is PK — still link them (lower confidence)
+              candidates.push({
+                fromTableId: tA.id,
+                fromColumnId: colA.id,
+                toTableId: tB.id,
+                toColumnId: colB.id,
+                confidence: 0.8,
+              });
+            }
+          }
+
+          // Strategy 3: Suffix match after stripping prefix (0.7)
+          // AS/400 style: O0BCTN and O1BCTN share suffix BCTN
+          // Also works for any columns where stripped suffix matches
+          const suffA = getColumnSuffix(colA.name);
+          const suffB = getColumnSuffix(colB.name);
+          if (
+            suffA === suffB &&
+            suffA.length >= 2 &&
+            colA.name !== colB.name // Different full names (exact match handled above)
+          ) {
+            const alreadyMatched = candidates.some(
+              (c) =>
+                (c.fromTableId === tA.id &&
+                  c.fromColumnId === colA.id &&
+                  c.toTableId === tB.id &&
+                  c.toColumnId === colB.id) ||
+                (c.fromTableId === tB.id &&
+                  c.fromColumnId === colB.id &&
+                  c.toTableId === tA.id &&
+                  c.toColumnId === colA.id)
+            );
+            if (!alreadyMatched) {
+              // PK side is "from" if available, otherwise first table is from
+              if (colA.isPrimaryKey && !colB.isPrimaryKey) {
+                candidates.push({
+                  fromTableId: tA.id,
+                  fromColumnId: colA.id,
+                  toTableId: tB.id,
+                  toColumnId: colB.id,
+                  confidence: 0.7,
+                });
+              } else if (colB.isPrimaryKey && !colA.isPrimaryKey) {
+                candidates.push({
+                  fromTableId: tB.id,
+                  fromColumnId: colB.id,
+                  toTableId: tA.id,
+                  toColumnId: colA.id,
+                  confidence: 0.7,
+                });
+              } else {
+                // Neither or both are PK — still link
+                candidates.push({
+                  fromTableId: tA.id,
+                  fromColumnId: colA.id,
+                  toTableId: tB.id,
+                  toColumnId: colB.id,
+                  confidence: 0.7,
+                });
+              }
             }
           }
 
           // Strategy 4: CamelCase Id match (0.6)
           // e.g., "orderId" → "order" table PK
-          const camelMatch = colA.name.match(/^(.+)Id$/);
-          if (camelMatch && !colA.isPrimaryKey) {
-            const ref = camelMatch[1].toLowerCase();
+          const camelMatchA = colA.name.match(/^(.+)Id$/);
+          if (camelMatchA && !colA.isPrimaryKey) {
+            const ref = camelMatchA[1].toLowerCase();
             const targetName = tB.name.toLowerCase();
             if (
               (targetName === ref ||
@@ -125,6 +180,25 @@ export function inferRelationships(tables: Record<string, Table>): Relationship[
                 fromColumnId: colB.id,
                 toTableId: tA.id,
                 toColumnId: colA.id,
+                confidence: 0.6,
+              });
+            }
+          }
+          const camelMatchB = colB.name.match(/^(.+)Id$/);
+          if (camelMatchB && !colB.isPrimaryKey) {
+            const ref = camelMatchB[1].toLowerCase();
+            const targetName = tA.name.toLowerCase();
+            if (
+              (targetName === ref ||
+                targetName === pluralize(ref) ||
+                singularize(targetName) === ref) &&
+              colA.isPrimaryKey
+            ) {
+              candidates.push({
+                fromTableId: tA.id,
+                fromColumnId: colA.id,
+                toTableId: tB.id,
+                toColumnId: colB.id,
                 confidence: 0.6,
               });
             }

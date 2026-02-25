@@ -1,12 +1,28 @@
 import { COLORS } from "@/lib/constants";
+import SaveIndicator from "./SaveIndicator";
+import type { SaveStatus } from "@/lib/erd-persistence";
 
 interface HeaderProps {
   tableCount: number;
   relationshipCount: number;
   columnCount: number;
+  userName: string;
+  userRole: string;
+  erdName: string;
+  onUpdateName: (name: string) => void;
+  saveStatus: SaveStatus;
 }
 
-export default function Header({ tableCount, relationshipCount, columnCount }: HeaderProps) {
+export default function Header({
+  tableCount,
+  relationshipCount,
+  columnCount,
+  userName,
+  userRole,
+  erdName,
+  onUpdateName,
+  saveStatus,
+}: HeaderProps) {
   return (
     <div
       style={{
@@ -32,18 +48,27 @@ export default function Header({ tableCount, relationshipCount, columnCount }: H
         >
           ERD BUILDER
         </div>
-        <div
+        <input
+          type="text"
+          value={erdName}
+          onChange={(e) => onUpdateName(e.target.value)}
           style={{
             fontFamily: "var(--font-display), sans-serif",
             color: COLORS.text,
             fontSize: 18,
             fontWeight: 700,
             letterSpacing: "0.04em",
+            background: "transparent",
+            border: "none",
+            outline: "none",
+            padding: 0,
+            width: 260,
           }}
-        >
-          Entity Relationship Diagram
-        </div>
+        />
       </div>
+
+      <SaveIndicator status={saveStatus} />
+
       <div style={{ marginLeft: "auto", display: "flex", gap: 24, alignItems: "flex-end" }}>
         {[
           { label: "TABLES", value: tableCount },
@@ -74,6 +99,22 @@ export default function Header({ tableCount, relationshipCount, columnCount }: H
             </div>
           </div>
         ))}
+
+        <div
+          style={{
+            fontFamily: "var(--font-mono), monospace",
+            fontSize: 11,
+            color: COLORS.textDim,
+            letterSpacing: "0.05em",
+            borderLeft: `1px solid ${COLORS.borderDim}`,
+            paddingLeft: 16,
+          }}
+        >
+          {userName}
+          {userRole === "admin" && (
+            <span style={{ color: COLORS.accent, marginLeft: 6 }}>ADMIN</span>
+          )}
+        </div>
       </div>
     </div>
   );

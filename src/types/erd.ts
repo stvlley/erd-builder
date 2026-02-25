@@ -44,8 +44,15 @@ export interface ERDState {
   sidebar: SidebarMode;
 }
 
+export interface SerializableERDState {
+  tables: Record<string, Table>;
+  relationships: Relationship[];
+}
+
 export type ERDAction =
   | { type: "LOAD_TABLES"; tables: Record<string, Table>; relationships: Relationship[] }
+  | { type: "LOAD_FROM_DB"; tables: Record<string, Table>; relationships: Relationship[] }
+  | { type: "GENERATE_RELATIONSHIPS"; relationships: Relationship[]; tables: Record<string, Table> }
   | { type: "MOVE_TABLE"; tableId: string; x: number; y: number }
   | { type: "SET_DRAGGING"; dragging: ERDState["dragging"] }
   | { type: "SET_HOVERED_TABLE"; tableId: string | null }

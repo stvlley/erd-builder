@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { ERDState, ERDAction, Relationship } from "@/types/erd";
 import { TABLE_W } from "@/lib/constants";
 import { getTableHeight } from "@/lib/geometry";
@@ -16,24 +16,69 @@ interface CanvasProps {
   svgRef: React.RefObject<SVGSVGElement | null>;
 }
 
+const MIN_ZOOM = 0.1;
+const MAX_ZOOM = 3;
+
 export default function Canvas({ state, dispatch, svgRef }: CanvasProps) {
   const { tables, relationships, hoveredTableId, hoveredField, activeRelationshipIndex, dragging } =
     state;
 
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [panning, setPanning] = useState<{ startX: number; startY: number; panX: number; panY: number } | null>(null);
+
   const getSVGPoint = useCallback(
     (clientX: number, clientY: number) => {
-      const svgEl = svgRef.current;
-      if (!svgEl) return { x: 0, y: 0 };
-      const pt = svgEl.createSVGPoint();
-      pt.x = clientX;
-      pt.y = clientY;
-      const ctm = svgEl.getScreenCTM();
-      if (!ctm) return { x: 0, y: 0 };
-      return pt.matrixTransform(ctm.inverse());
+      const container = containerRef.current;
+      if (!container) return { x: 0, y: 0 };
+      const rect = container.getBoundingClientRect();
+      return {
+        x: (clientX - rect.left - pan.x) / zoom,
+        y: (clientY - rect.top - pan.y) / zoom,
+      };
     },
-    [svgRef]
+    [zoom, pan]
   );
 
+  // Wheel zoom (trackpad pinch + mouse wheel)
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+
+      if (e.ctrlKey || e.metaKey) {
+        // Pinch zoom (trackpad) — ctrlKey is set for pinch gestures
+        const rect = container.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+
+        const delta = -e.deltaY * 0.01;
+        setZoom((prev) => {
+          const next = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, prev * (1 + delta)));
+          const scale = next / prev;
+          setPan((p) => ({
+            x: mouseX - scale * (mouseX - p.x),
+            y: mouseY - scale * (mouseY - p.y),
+          }));
+          return next;
+        });
+      } else {
+        // Regular scroll — pan
+        setPan((p) => ({
+          x: p.x - e.deltaX,
+          y: p.y - e.deltaY,
+        }));
+      }
+    };
+
+    container.addEventListener("wheel", onWheel, { passive: false });
+    return () => container.removeEventListener("wheel", onWheel);
+  }, []);
+
+  // Table drag
   const handleMouseDown = useCallback(
     (e: React.MouseEvent, tableId: string) => {
       e.preventDefault();
@@ -48,6 +93,18 @@ export default function Canvas({ state, dispatch, svgRef }: CanvasProps) {
       dispatch({ type: "SET_HOVERED_TABLE", tableId });
     },
     [tables, getSVGPoint, dispatch]
+  );
+
+  // Canvas pan (middle-click or right-click drag on empty space)
+  const handleCanvasMouseDown = useCallback(
+    (e: React.MouseEvent) => {
+      // Middle click or right click to pan
+      if (e.button === 1 || e.button === 2) {
+        e.preventDefault();
+        setPanning({ startX: e.clientX, startY: e.clientY, panX: pan.x, panY: pan.y });
+      }
+    },
+    [pan]
   );
 
   useEffect(() => {
@@ -75,6 +132,29 @@ export default function Canvas({ state, dispatch, svgRef }: CanvasProps) {
     };
   }, [dragging, getSVGPoint, dispatch]);
 
+  // Pan drag handling
+  useEffect(() => {
+    if (!panning) return;
+
+    const onMove = (e: MouseEvent) => {
+      setPan({
+        x: panning.panX + (e.clientX - panning.startX),
+        y: panning.panY + (e.clientY - panning.startY),
+      });
+    };
+
+    const onUp = () => {
+      setPanning(null);
+    };
+
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [panning]);
+
   const tableEntries = Object.entries(tables);
   const maxX = tableEntries.length > 0
     ? Math.max(...tableEntries.map(([, t]) => t.x + TABLE_W + 60))
@@ -87,14 +167,26 @@ export default function Canvas({ state, dispatch, svgRef }: CanvasProps) {
 
   return (
     <div
-      className="flex-1 overflow-auto"
-      style={{ background: "#1a1a1a" }}
+      ref={containerRef}
+      className="flex-1"
+      style={{
+        background: "#1a1a1a",
+        overflow: "hidden",
+        position: "relative",
+        cursor: panning ? "grabbing" : dragging ? "grabbing" : "default",
+      }}
+      onMouseDown={handleCanvasMouseDown}
+      onContextMenu={(e) => e.preventDefault()}
     >
       <svg
         ref={svgRef}
         width={svgW}
         height={svgH}
-        style={{ display: "block", cursor: dragging ? "grabbing" : "default" }}
+        style={{
+          display: "block",
+          transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+          transformOrigin: "0 0",
+        }}
       >
         <SVGDefs />
         <GridPattern width={svgW} height={svgH} />
@@ -168,6 +260,22 @@ export default function Canvas({ state, dispatch, svgRef }: CanvasProps) {
           );
         })}
       </svg>
+
+      {/* Zoom indicator */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: 8,
+          right: 8,
+          fontFamily: "var(--font-mono), monospace",
+          fontSize: 10,
+          color: "#666",
+          letterSpacing: "0.1em",
+          userSelect: "none",
+        }}
+      >
+        {Math.round(zoom * 100)}%
+      </div>
     </div>
   );
 }

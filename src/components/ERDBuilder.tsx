@@ -2,6 +2,7 @@
 
 import { useReducer, useRef, useState, useEffect, useMemo } from "react";
 import { erdReducer, initialState } from "@/lib/erd-reducer";
+import { useERDPersistence } from "@/lib/erd-persistence";
 import Header from "./Header";
 import Toolbar from "./Toolbar";
 import UploadPanel from "./UploadPanel";
@@ -10,10 +11,19 @@ import Sidebar from "./Sidebar";
 import StatsFooter from "./StatsFooter";
 import AddTableModal from "./AddTableModal";
 
-export default function ERDBuilder() {
+interface ERDBuilderProps {
+  erdId: string;
+  userName: string;
+  userRole: string;
+}
+
+export default function ERDBuilder({ erdId, userName, userRole }: ERDBuilderProps) {
   const [state, dispatch] = useReducer(erdReducer, initialState);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [showAddTable, setShowAddTable] = useState(false);
+
+  const { saveStatus, saveNow, erdName, updateName, loaded } =
+    useERDPersistence(erdId, state, dispatch);
 
   const tableCount = Object.keys(state.tables).length;
   const columnCount = useMemo(
@@ -35,6 +45,27 @@ export default function ERDBuilder() {
 
   const hasTables = tableCount > 0;
 
+  if (!loaded) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          height: "100vh",
+          background: "#242424",
+          color: "#888",
+          fontFamily: "var(--font-mono), monospace",
+          fontSize: 12,
+          letterSpacing: "0.1em",
+          textTransform: "uppercase",
+        }}
+      >
+        Loading...
+      </div>
+    );
+  }
+
   return (
     <div
       style={{
@@ -49,6 +80,11 @@ export default function ERDBuilder() {
         tableCount={tableCount}
         relationshipCount={state.relationships.length}
         columnCount={columnCount}
+        userName={userName}
+        userRole={userRole}
+        erdName={erdName}
+        onUpdateName={updateName}
+        saveStatus={saveStatus}
       />
 
       {hasTables && (
@@ -57,6 +93,9 @@ export default function ERDBuilder() {
           dispatch={dispatch}
           svgRef={svgRef}
           onAddTable={() => setShowAddTable(true)}
+          state={state}
+          onSave={saveNow}
+          saveStatus={saveStatus}
         />
       )}
 

@@ -1,20 +1,32 @@
 "use client";
 
 import { useRef, useCallback } from "react";
-import { ERDAction } from "@/types/erd";
+import { ERDAction, ERDState } from "@/types/erd";
 import { parseFile, filesToTables, layoutTables } from "@/lib/parse-file";
 import { inferRelationships, markForeignKeys } from "@/lib/infer-relationships";
 import { COLORS } from "@/lib/constants";
 import { exportSVG } from "@/lib/export-svg";
+import type { SaveStatus } from "@/lib/erd-persistence";
 
 interface ToolbarProps {
   tableCount: number;
   dispatch: React.Dispatch<ERDAction>;
   svgRef: React.RefObject<SVGSVGElement | null>;
   onAddTable: () => void;
+  state: ERDState;
+  onSave: () => void;
+  saveStatus: SaveStatus;
 }
 
-export default function Toolbar({ tableCount, dispatch, svgRef, onAddTable }: ToolbarProps) {
+export default function Toolbar({
+  tableCount,
+  dispatch,
+  svgRef,
+  onAddTable,
+  state,
+  onSave,
+  saveStatus,
+}: ToolbarProps) {
   const fileRef = useRef<HTMLInputElement>(null);
 
   const handleUpload = useCallback(
@@ -44,6 +56,16 @@ export default function Toolbar({ tableCount, dispatch, svgRef, onAddTable }: To
     [dispatch, tableCount]
   );
 
+  const handleGenerateRelationships = useCallback(() => {
+    const relationships = inferRelationships(state.tables);
+    const updatedTables = markForeignKeys(state.tables, relationships);
+    dispatch({
+      type: "GENERATE_RELATIONSHIPS",
+      relationships,
+      tables: updatedTables,
+    });
+  }, [dispatch, state.tables]);
+
   const btnStyle = {
     padding: "8px 16px",
     background: "transparent",
@@ -55,6 +77,7 @@ export default function Toolbar({ tableCount, dispatch, svgRef, onAddTable }: To
     fontFamily: "var(--font-mono), monospace",
     textTransform: "uppercase" as const,
     transition: "border-color 0.15s, color 0.15s",
+    cursor: "pointer",
   };
 
   const primaryBtnStyle = {
@@ -107,12 +130,29 @@ export default function Toolbar({ tableCount, dispatch, svgRef, onAddTable }: To
         + ADD RELATIONSHIP
       </button>
       <button
+        style={{
+          ...btnStyle,
+          borderColor: COLORS.accent + "66",
+          color: COLORS.accent,
+        }}
+        onClick={handleGenerateRelationships}
+      >
+        GENERATE RELATIONSHIPS
+      </button>
+      <button
         style={btnStyle}
         onClick={() => {
           if (svgRef.current) exportSVG(svgRef.current);
         }}
       >
         EXPORT SVG
+      </button>
+      <button
+        style={btnStyle}
+        onClick={onSave}
+        disabled={saveStatus === "saving"}
+      >
+        {saveStatus === "saving" ? "SAVING..." : "SAVE"}
       </button>
       <div style={{ flex: 1 }} />
       <button
