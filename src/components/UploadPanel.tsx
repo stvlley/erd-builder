@@ -137,6 +137,20 @@ export default function UploadPanel({ dispatch, existingTableCount }: UploadPane
             >
               CSV, TSV, XLSX — one file per table
             </div>
+            <div
+              style={{
+                fontFamily: "var(--font-mono), monospace",
+                fontSize: 10,
+                color: COLORS.textMuted,
+                letterSpacing: "0.06em",
+                marginBottom: 24,
+                lineHeight: 1.6,
+              }}
+            >
+              Schema files: columns &quot;name&quot; + &quot;type&quot; define your table
+              <br />
+              Data files: headers become columns, types auto-inferred
+            </div>
             <label
               style={{
                 display: "inline-block",

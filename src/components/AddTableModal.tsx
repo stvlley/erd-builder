@@ -42,6 +42,7 @@ export default function AddTableModal({
       x: 60 + (existingTableCount % 3) * 320,
       y: 60 + Math.floor(existingTableCount / 3) * 400,
       columns,
+      collapsed: false,
     };
 
     dispatch({ type: "ADD_TABLE", table });

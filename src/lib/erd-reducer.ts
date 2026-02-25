@@ -166,6 +166,18 @@ export function erdReducer(state: ERDState, action: ERDAction): ERDState {
             : state.sidebar,
       };
 
+    case "TOGGLE_COLLAPSE": {
+      const table = state.tables[action.tableId];
+      if (!table) return state;
+      return {
+        ...state,
+        tables: {
+          ...state.tables,
+          [action.tableId]: { ...table, collapsed: !table.collapsed },
+        },
+      };
+    }
+
     case "SET_SIDEBAR":
       return { ...state, sidebar: action.sidebar };
 

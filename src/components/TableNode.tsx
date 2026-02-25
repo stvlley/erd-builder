@@ -103,16 +103,32 @@ export default function TableNode({
         opacity={0.9}
       />
 
-      {/* Drag handle */}
-      <text
-        x={table.x + TABLE_W - 14}
-        y={table.y + 22}
-        fill={table.color + "60"}
-        fontSize={12}
-        fontFamily="var(--font-mono), monospace"
+      {/* Collapse toggle */}
+      <g
+        onClick={(e) => {
+          e.stopPropagation();
+          dispatch({ type: "TOGGLE_COLLAPSE", tableId: table.id });
+        }}
+        style={{ cursor: "pointer" }}
       >
-        ⠿
-      </text>
+        <rect
+          x={table.x + TABLE_W - 28}
+          y={table.y + 6}
+          width={20}
+          height={16}
+          fill="transparent"
+        />
+        <text
+          x={table.x + TABLE_W - 18}
+          y={table.y + 18}
+          fill={table.color + "80"}
+          fontSize={10}
+          fontFamily="var(--font-mono), monospace"
+          textAnchor="middle"
+        >
+          {table.collapsed ? "▸" : "▾"}
+        </text>
+      </g>
 
       {/* Table title */}
       <text
@@ -135,39 +151,41 @@ export default function TableNode({
         letterSpacing="0.18em"
       >
         ▸ {table.subtitle}
+        {table.collapsed ? ` (${table.columns.length})` : ""}
       </text>
 
-      {/* Field rows */}
-      {table.columns.map((column, idx) => {
-        const fy = table.y + HEADER_H + idx * ROW_H;
-        const colSuffix = getFieldSuffix(column.name);
-        const isActiveField =
-          hoveredField?.tableId === table.id && hoveredField?.columnId === column.id;
-        const isJoinHighlight =
-          hoveredField !== null &&
-          colSuffix === hoveredField.suffix &&
-          !(hoveredField.tableId === table.id && hoveredField.columnId === column.id);
+      {/* Field rows — only when expanded */}
+      {!table.collapsed &&
+        table.columns.map((column, idx) => {
+          const fy = table.y + HEADER_H + idx * ROW_H;
+          const colSuffix = getFieldSuffix(column.name);
+          const isActiveField =
+            hoveredField?.tableId === table.id && hoveredField?.columnId === column.id;
+          const isJoinHighlight =
+            hoveredField !== null &&
+            colSuffix === hoveredField.suffix &&
+            !(hoveredField.tableId === table.id && hoveredField.columnId === column.id);
 
-        return (
-          <FieldRow
-            key={column.id}
-            column={column}
-            tableX={table.x}
-            fieldY={fy}
-            index={idx}
-            tableColor={table.color}
-            isActiveField={isActiveField}
-            isJoinHighlight={isJoinHighlight}
-            onMouseEnter={() =>
-              dispatch({
-                type: "SET_HOVERED_FIELD",
-                field: { tableId: table.id, columnId: column.id, suffix: colSuffix },
-              })
-            }
-            onMouseLeave={() => dispatch({ type: "SET_HOVERED_FIELD", field: null })}
-          />
-        );
-      })}
+          return (
+            <FieldRow
+              key={column.id}
+              column={column}
+              tableX={table.x}
+              fieldY={fy}
+              index={idx}
+              tableColor={table.color}
+              isActiveField={isActiveField}
+              isJoinHighlight={isJoinHighlight}
+              onMouseEnter={() =>
+                dispatch({
+                  type: "SET_HOVERED_FIELD",
+                  field: { tableId: table.id, columnId: column.id, suffix: colSuffix },
+                })
+              }
+              onMouseLeave={() => dispatch({ type: "SET_HOVERED_FIELD", field: null })}
+            />
+          );
+        })}
     </g>
   );
 }

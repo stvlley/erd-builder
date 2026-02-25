@@ -28,6 +28,49 @@ function detectPrimaryKey(columns: { name: string; type: string }[]): string[] {
   return columns.length > 0 ? [columns[0].name] : [];
 }
 
+// Find a column header that looks like "name" or "column" (case-insensitive)
+function findNameCol(fields: string[]): string | null {
+  const patterns = [/^name$/i, /^column$/i, /^column.?name$/i, /^field$/i, /^field.?name$/i];
+  for (const f of fields) {
+    if (patterns.some((p) => p.test(f.trim()))) return f;
+  }
+  return null;
+}
+
+// Find a column header that looks like "type" or "data_type" (case-insensitive)
+function findTypeCol(fields: string[]): string | null {
+  const patterns = [/^type$/i, /^data.?type$/i, /^column.?type$/i, /^field.?type$/i, /^dtype$/i];
+  for (const f of fields) {
+    if (patterns.some((p) => p.test(f.trim()))) return f;
+  }
+  return null;
+}
+
+// Detect if a CSV is a schema definition (has name + type columns)
+// vs a raw data file (column headers are the field names, rows are data)
+function isSchemaDefinition(fields: string[]): boolean {
+  return findNameCol(fields) !== null && findTypeCol(fields) !== null;
+}
+
+function parseCSVAsSchema(data: Record<string, string>[], fields: string[]): ParsedFile["columns"] {
+  const nameCol = findNameCol(fields)!;
+  const typeCol = findTypeCol(fields)!;
+
+  return data
+    .map((row) => ({
+      name: (row[nameCol] ?? "").trim(),
+      type: (row[typeCol] ?? "TEXT").trim().toUpperCase(),
+    }))
+    .filter((c) => c.name !== "");
+}
+
+function parseCSVAsData(data: Record<string, string>[], fields: string[]): ParsedFile["columns"] {
+  return fields.map((name) => ({
+    name,
+    type: inferType(data.map((row) => row[name])),
+  }));
+}
+
 function parseCSV(text: string): ParsedFile["columns"] {
   const result = Papa.parse(text, { header: true, skipEmptyLines: true });
   if (!result.meta.fields || result.meta.fields.length === 0) return [];
@@ -35,9 +78,35 @@ function parseCSV(text: string): ParsedFile["columns"] {
   const fields = result.meta.fields;
   const data = result.data as Record<string, string>[];
 
+  // Detect if this is a schema definition file (has name + type columns)
+  if (isSchemaDefinition(fields)) {
+    return parseCSVAsSchema(data, fields);
+  }
+
+  // Otherwise treat as raw data — headers become column names, types inferred
+  return parseCSVAsData(data, fields);
+}
+
+function parseExcelSheet(rows: Record<string, unknown>[]): ParsedFile["columns"] {
+  if (rows.length === 0) return [];
+  const fields = Object.keys(rows[0]);
+
+  // Check if schema definition
+  if (isSchemaDefinition(fields)) {
+    const nameCol = findNameCol(fields)!;
+    const typeCol = findTypeCol(fields)!;
+    return rows
+      .map((row) => ({
+        name: String(row[nameCol] ?? "").trim(),
+        type: String(row[typeCol] ?? "TEXT").trim().toUpperCase(),
+      }))
+      .filter((c) => c.name !== "");
+  }
+
+  // Raw data — infer types
   return fields.map((name) => ({
     name,
-    type: inferType(data.map((row) => row[name])),
+    type: inferType(rows.map((row) => String(row[name] ?? ""))),
   }));
 }
 
@@ -50,11 +119,8 @@ function parseExcel(buffer: ArrayBuffer): ParsedFile[] {
     const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet);
     if (json.length === 0) continue;
 
-    const fields = Object.keys(json[0]);
-    const columns = fields.map((name) => ({
-      name,
-      type: inferType(json.map((row) => String(row[name] ?? ""))),
-    }));
+    const columns = parseExcelSheet(json);
+    if (columns.length === 0) continue;
 
     results.push({ fileName: sheetName, columns });
   }
@@ -105,6 +171,7 @@ export function filesToTables(
       x: GRID_START_X + col * GRID_GAP_X,
       y: GRID_START_Y + row * GRID_GAP_Y,
       columns,
+      collapsed: false,
     };
 
     return table;

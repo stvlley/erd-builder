@@ -2,6 +2,7 @@ import { Table } from "@/types/erd";
 import { TABLE_W, ROW_H, HEADER_H } from "./constants";
 
 export function getTableHeight(table: Table): number {
+  if (table.collapsed) return HEADER_H + 8;
   return HEADER_H + table.columns.length * ROW_H + 8;
 }
 

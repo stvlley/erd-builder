@@ -14,6 +14,7 @@ export interface Table {
   x: number;
   y: number;
   columns: Column[];
+  collapsed: boolean;
 }
 
 export interface Relationship {
@@ -60,5 +61,6 @@ export type ERDAction =
   | { type: "ADD_RELATIONSHIP"; relationship: Relationship }
   | { type: "UPDATE_RELATIONSHIP"; relationshipId: string; updates: Partial<Relationship> }
   | { type: "DELETE_RELATIONSHIP"; relationshipId: string }
+  | { type: "TOGGLE_COLLAPSE"; tableId: string }
   | { type: "SET_SIDEBAR"; sidebar: SidebarMode }
   | { type: "RESET" };
