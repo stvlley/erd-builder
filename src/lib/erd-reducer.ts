@@ -13,13 +13,18 @@ export const initialState: ERDState = {
 
 export function erdReducer(state: ERDState, action: ERDAction): ERDState {
   switch (action.type) {
-    case "LOAD_TABLES":
+    case "LOAD_TABLES": {
+      console.log("[ERD Reducer] LOAD_TABLES:", Object.keys(action.tables).length, "tables");
+      for (const [id, t] of Object.entries(action.tables)) {
+        console.log(`[ERD Reducer]   "${t.name}" (${id}): ${t.columns.length} columns, collapsed=${t.collapsed}`);
+      }
       return {
         ...state,
         tables: { ...state.tables, ...action.tables },
         relationships: [...state.relationships, ...action.relationships],
         sidebar: { type: "closed" },
       };
+    }
 
     case "MOVE_TABLE":
       return {

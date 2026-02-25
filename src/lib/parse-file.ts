@@ -1,5 +1,4 @@
 import Papa from "papaparse";
-import * as XLSX from "xlsx";
 import { Column, Table } from "@/types/erd";
 import { TABLE_COLORS, GRID_START_X, GRID_START_Y, GRID_GAP_X, GRID_GAP_Y, GRID_COLS } from "./constants";
 
@@ -24,11 +23,9 @@ function detectPrimaryKey(columns: { name: string; type: string }[]): string[] {
     pkPatterns.some((p) => p.test(c.name))
   );
   if (pks.length > 0) return pks.map((c) => c.name);
-  // Default: first column
   return columns.length > 0 ? [columns[0].name] : [];
 }
 
-// Find a column header that looks like "name" or "column" (case-insensitive)
 function findNameCol(fields: string[]): string | null {
   const patterns = [/^name$/i, /^column$/i, /^column.?name$/i, /^field$/i, /^field.?name$/i];
   for (const f of fields) {
@@ -37,7 +34,6 @@ function findNameCol(fields: string[]): string | null {
   return null;
 }
 
-// Find a column header that looks like "type" or "data_type" (case-insensitive)
 function findTypeCol(fields: string[]): string | null {
   const patterns = [/^type$/i, /^data.?type$/i, /^column.?type$/i, /^field.?type$/i, /^dtype$/i];
   for (const f of fields) {
@@ -46,29 +42,19 @@ function findTypeCol(fields: string[]): string | null {
   return null;
 }
 
-// Detect if a CSV is a schema definition (has name + type columns)
-// vs a raw data file (column headers are the field names, rows are data)
-function isSchemaDefinition(fields: string[]): boolean {
-  return findNameCol(fields) !== null && findTypeCol(fields) !== null;
-}
+function isSchemaDefinition(fields: string[]): { nameCol: string; typeCol: string } | null {
+  // Strategy 1: Explicit header matching (name/column + type/data_type)
+  const nc = findNameCol(fields);
+  const tc = findTypeCol(fields);
+  if (nc !== null && tc !== null) return { nameCol: nc, typeCol: tc };
 
-function parseCSVAsSchema(data: Record<string, string>[], fields: string[]): ParsedFile["columns"] {
-  const nameCol = findNameCol(fields)!;
-  const typeCol = findTypeCol(fields)!;
+  // Strategy 2: If CSV has exactly 2 columns, treat first as name, second as type
+  // This handles files where headers are non-standard (e.g. "Field", "DataType", etc.)
+  if (fields.length === 2) {
+    return { nameCol: fields[0], typeCol: fields[1] };
+  }
 
-  return data
-    .map((row) => ({
-      name: (row[nameCol] ?? "").trim(),
-      type: (row[typeCol] ?? "TEXT").trim().toUpperCase(),
-    }))
-    .filter((c) => c.name !== "");
-}
-
-function parseCSVAsData(data: Record<string, string>[], fields: string[]): ParsedFile["columns"] {
-  return fields.map((name) => ({
-    name,
-    type: inferType(data.map((row) => row[name])),
-  }));
+  return null;
 }
 
 function parseCSV(text: string): ParsedFile["columns"] {
@@ -78,39 +64,32 @@ function parseCSV(text: string): ParsedFile["columns"] {
   const fields = result.meta.fields;
   const data = result.data as Record<string, string>[];
 
-  // Detect if this is a schema definition file (has name + type columns)
-  if (isSchemaDefinition(fields)) {
-    return parseCSVAsSchema(data, fields);
-  }
+  console.log("[ERD parseCSV] headers:", fields, "rows:", data.length);
 
-  // Otherwise treat as raw data — headers become column names, types inferred
-  return parseCSVAsData(data, fields);
-}
-
-function parseExcelSheet(rows: Record<string, unknown>[]): ParsedFile["columns"] {
-  if (rows.length === 0) return [];
-  const fields = Object.keys(rows[0]);
-
-  // Check if schema definition
-  if (isSchemaDefinition(fields)) {
-    const nameCol = findNameCol(fields)!;
-    const typeCol = findTypeCol(fields)!;
-    return rows
+  const schema = isSchemaDefinition(fields);
+  if (schema) {
+    console.log("[ERD parseCSV] Detected schema file, nameCol:", schema.nameCol, "typeCol:", schema.typeCol);
+    const columns = data
       .map((row) => ({
-        name: String(row[nameCol] ?? "").trim(),
-        type: String(row[typeCol] ?? "TEXT").trim().toUpperCase(),
+        name: (row[schema.nameCol] ?? "").trim(),
+        type: (row[schema.typeCol] ?? "TEXT").trim().toUpperCase(),
       }))
       .filter((c) => c.name !== "");
+    console.log("[ERD parseCSV] Parsed", columns.length, "columns:", columns);
+    return columns;
   }
 
-  // Raw data — infer types
+  // Raw data file — headers ARE the column names, infer types from values
+  console.log("[ERD parseCSV] Treating as data file, headers become columns");
   return fields.map((name) => ({
     name,
-    type: inferType(rows.map((row) => String(row[name] ?? ""))),
+    type: inferType(data.map((row) => row[name])),
   }));
 }
 
-function parseExcel(buffer: ArrayBuffer): ParsedFile[] {
+async function parseExcel(buffer: ArrayBuffer): Promise<ParsedFile[]> {
+  // Dynamic import to avoid bundling xlsx at module level
+  const XLSX = await import("xlsx");
   const workbook = XLSX.read(buffer, { type: "array" });
   const results: ParsedFile[] = [];
 
@@ -119,13 +98,36 @@ function parseExcel(buffer: ArrayBuffer): ParsedFile[] {
     const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet);
     if (json.length === 0) continue;
 
-    const columns = parseExcelSheet(json);
-    if (columns.length === 0) continue;
+    const rowFields = Object.keys(json[0]);
 
-    results.push({ fileName: sheetName, columns });
+    const schema = isSchemaDefinition(rowFields);
+    if (schema) {
+      const columns = json
+        .map((row) => ({
+          name: String(row[schema.nameCol] ?? "").trim(),
+          type: String(row[schema.typeCol] ?? "TEXT").trim().toUpperCase(),
+        }))
+        .filter((c) => c.name !== "");
+      if (columns.length > 0) {
+        results.push({ fileName: sheetName, columns });
+      }
+    } else {
+      const columns = rowFields.map((name) => ({
+        name,
+        type: inferType(json.map((row) => String(row[name] ?? ""))),
+      }));
+      results.push({ fileName: sheetName, columns });
+    }
   }
 
   return results;
+}
+
+function generateId(): string {
+  if (typeof crypto !== "undefined" && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return Math.random().toString(36).slice(2) + Date.now().toString(36);
 }
 
 export async function parseFile(file: File): Promise<ParsedFile[]> {
@@ -134,14 +136,18 @@ export async function parseFile(file: File): Promise<ParsedFile[]> {
   if (ext === "csv" || ext === "tsv") {
     const text = await file.text();
     const columns = parseCSV(text);
+    console.log(`[ERD] Parsed CSV "${file.name}": ${columns.length} columns`, columns);
     return [{ fileName: file.name.replace(/\.\w+$/, ""), columns }];
   }
 
   if (ext === "xlsx" || ext === "xls") {
     const buffer = await file.arrayBuffer();
-    return parseExcel(buffer);
+    const results = await parseExcel(buffer);
+    console.log(`[ERD] Parsed Excel "${file.name}": ${results.length} sheet(s)`, results);
+    return results;
   }
 
+  console.warn(`[ERD] Unsupported file type: ${ext}`);
   return [];
 }
 
@@ -156,17 +162,19 @@ export function filesToTables(
     const pkNames = detectPrimaryKey(pf.columns);
 
     const columns: Column[] = pf.columns.map((c) => ({
-      id: crypto.randomUUID(),
+      id: generateId(),
       name: c.name,
       type: c.type,
       isPrimaryKey: pkNames.includes(c.name),
       isForeignKey: false,
     }));
 
+    console.log(`[ERD] Table "${pf.fileName}": ${columns.length} columns created`, columns);
+
     const table: Table = {
-      id: crypto.randomUUID(),
+      id: generateId(),
       name: pf.fileName,
-      subtitle: `${pf.columns.length} columns`,
+      subtitle: `${columns.length} columns`,
       color: TABLE_COLORS[idx % TABLE_COLORS.length],
       x: GRID_START_X + col * GRID_GAP_X,
       y: GRID_START_Y + row * GRID_GAP_Y,
@@ -178,8 +186,6 @@ export function filesToTables(
   });
 }
 
-// Compute proper Y positioning after all tables are created
-// so they don't overlap vertically
 export function layoutTables(tables: Table[]): Table[] {
   const colHeights: number[] = [];
 
@@ -195,8 +201,7 @@ export function layoutTables(tables: Table[]): Table[] {
       y: colHeights[col],
     };
 
-    // Advance column height
-    const height = 56 + table.columns.length * 24 + 8; // HEADER_H + columns * ROW_H + padding
+    const height = 56 + table.columns.length * 24 + 8;
     colHeights[col] += height + GRID_GAP_Y;
 
     return positioned;

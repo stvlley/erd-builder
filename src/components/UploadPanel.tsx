@@ -19,16 +19,26 @@ export default function UploadPanel({ dispatch, existingTableCount }: UploadPane
     async (files: FileList) => {
       setIsProcessing(true);
       try {
+        console.log("[ERD] Processing", files.length, "file(s)");
         const allParsed = [];
         for (const file of Array.from(files)) {
           const parsed = await parseFile(file);
           allParsed.push(...parsed);
         }
 
-        if (allParsed.length === 0) return;
+        console.log("[ERD] Total parsed:", allParsed.length, "file(s)");
+        if (allParsed.length === 0) {
+          console.warn("[ERD] No files parsed successfully");
+          return;
+        }
 
         let newTables = filesToTables(allParsed, existingTableCount);
         newTables = layoutTables(newTables);
+
+        console.log("[ERD] Created", newTables.length, "tables");
+        for (const t of newTables) {
+          console.log(`[ERD]   "${t.name}": ${t.columns.length} columns`);
+        }
 
         const tableMap: Record<string, (typeof newTables)[0]> = {};
         for (const t of newTables) {
@@ -38,11 +48,15 @@ export default function UploadPanel({ dispatch, existingTableCount }: UploadPane
         const relationships = inferRelationships(tableMap);
         const updatedTables = markForeignKeys(tableMap, relationships);
 
+        console.log("[ERD] Dispatching LOAD_TABLES with", Object.keys(updatedTables).length, "tables and", relationships.length, "relationships");
+
         dispatch({
           type: "LOAD_TABLES",
           tables: updatedTables,
           relationships,
         });
+      } catch (err) {
+        console.error("[ERD] Upload processing error:", err);
       } finally {
         setIsProcessing(false);
       }

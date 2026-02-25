@@ -19,23 +19,27 @@ export default function Toolbar({ tableCount, dispatch, svgRef, onAddTable }: To
 
   const handleUpload = useCallback(
     async (files: FileList) => {
-      const allParsed = [];
-      for (const file of Array.from(files)) {
-        const parsed = await parseFile(file);
-        allParsed.push(...parsed);
+      try {
+        const allParsed = [];
+        for (const file of Array.from(files)) {
+          const parsed = await parseFile(file);
+          allParsed.push(...parsed);
+        }
+        if (allParsed.length === 0) return;
+
+        let newTables = filesToTables(allParsed, tableCount);
+        newTables = layoutTables(newTables);
+
+        const tableMap: Record<string, (typeof newTables)[0]> = {};
+        for (const t of newTables) tableMap[t.id] = t;
+
+        const relationships = inferRelationships(tableMap);
+        const updatedTables = markForeignKeys(tableMap, relationships);
+
+        dispatch({ type: "LOAD_TABLES", tables: updatedTables, relationships });
+      } catch (err) {
+        console.error("[ERD] Toolbar upload error:", err);
       }
-      if (allParsed.length === 0) return;
-
-      let newTables = filesToTables(allParsed, tableCount);
-      newTables = layoutTables(newTables);
-
-      const tableMap: Record<string, (typeof newTables)[0]> = {};
-      for (const t of newTables) tableMap[t.id] = t;
-
-      const relationships = inferRelationships(tableMap);
-      const updatedTables = markForeignKeys(tableMap, relationships);
-
-      dispatch({ type: "LOAD_TABLES", tables: updatedTables, relationships });
     },
     [dispatch, tableCount]
   );
