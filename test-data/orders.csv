@@ -1,0 +1,4 @@
+id,user_id,total,status,created_at
+101,1,59.99,completed,2024-02-01
+102,2,124.50,pending,2024-02-15
+103,1,89.00,completed,2024-03-01
