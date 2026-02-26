@@ -51,7 +51,6 @@ export default function RelationshipLine({
         strokeWidth={isHot ? 2 : 1.5}
         strokeDasharray={isHot ? "none" : "5 4"}
         markerEnd={isHot ? "url(#arr-hot)" : "url(#arr)"}
-        filter={isHot ? "url(#glow)" : "none"}
         style={{ transition: "stroke 0.12s, stroke-width 0.12s" }}
       />
 
@@ -64,14 +63,14 @@ export default function RelationshipLine({
             width={44}
             height={18}
             fill={COLORS.bg}
-            stroke={COLORS.accent}
+            stroke="#d4683a"
             strokeWidth={1}
           />
           <text
             x={midX}
             y={midY + 4}
             textAnchor="middle"
-            fill={COLORS.accent}
+            fill="#d4683a"
             fontSize={9}
             fontFamily="var(--font-mono), monospace"
             letterSpacing="0.1em"
