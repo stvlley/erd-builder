@@ -4,34 +4,34 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { COLORS } from "@/lib/constants";
 
-export default function InviteCodeForm() {
+export default function LoginForm() {
   const router = useRouter();
-  const [code, setCode] = useState("");
-  const [displayName, setDisplayName] = useState("");
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!code.trim()) return;
+    if (!username.trim() || !password) return;
 
     setLoading(true);
     setError("");
 
     try {
-      const res = await fetch("/api/auth/redeem", {
+      const res = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          code: code.trim(),
-          displayName: displayName.trim() || "User",
+          username: username.trim(),
+          password,
         }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
-        setError(data.error || "Invalid code");
+        setError(data.error || "Login failed");
         setLoading(false);
         return;
       }
@@ -43,6 +43,8 @@ export default function InviteCodeForm() {
       setLoading(false);
     }
   };
+
+  const canSubmit = username.trim() && password;
 
   return (
     <div
@@ -79,7 +81,7 @@ export default function InviteCodeForm() {
             textAlign: "center",
           }}
         >
-          Enter invite code
+          Sign in
         </div>
       </div>
 
@@ -94,65 +96,77 @@ export default function InviteCodeForm() {
       >
         <input
           type="text"
-          placeholder="Display name"
-          value={displayName}
-          onChange={(e) => setDisplayName(e.target.value)}
+          placeholder="Username"
+          value={username}
+          onChange={(e) => {
+            setUsername(e.target.value);
+            setError("");
+          }}
+          autoFocus
+          autoComplete="username"
           style={{
             padding: "12px 16px",
             fontSize: 14,
             fontFamily: "var(--font-body), sans-serif",
             background: COLORS.canvas,
-            border: `2px solid ${COLORS.borderDim}`,
+            border: `2px solid ${error ? "#ef4444" : COLORS.borderDim}`,
             color: COLORS.text,
             outline: "none",
             transition: "border-color 0.15s",
           }}
-          onFocus={(e) => (e.target.style.borderColor = COLORS.accent)}
-          onBlur={(e) => (e.target.style.borderColor = COLORS.borderDim)}
+          onFocus={(e) => {
+            if (!error) e.target.style.borderColor = COLORS.accent;
+          }}
+          onBlur={(e) => {
+            if (!error) e.target.style.borderColor = COLORS.borderDim;
+          }}
         />
 
         <input
-          type="text"
-          placeholder="Invite code"
-          value={code}
+          type="password"
+          placeholder="Password"
+          value={password}
           onChange={(e) => {
-            setCode(e.target.value.toUpperCase());
+            setPassword(e.target.value);
             setError("");
           }}
-          autoFocus
+          autoComplete="current-password"
           style={{
             padding: "12px 16px",
-            fontSize: 16,
-            fontWeight: 700,
-            fontFamily: "var(--font-mono), monospace",
+            fontSize: 14,
+            fontFamily: "var(--font-body), sans-serif",
             background: COLORS.canvas,
-            border: `2px solid ${error ? "#ef4444" : code ? COLORS.accent : COLORS.borderDim}`,
+            border: `2px solid ${error ? "#ef4444" : COLORS.borderDim}`,
             color: COLORS.text,
-            letterSpacing: "0.15em",
-            textTransform: "uppercase",
             outline: "none",
             transition: "border-color 0.15s",
+          }}
+          onFocus={(e) => {
+            if (!error) e.target.style.borderColor = COLORS.accent;
+          }}
+          onBlur={(e) => {
+            if (!error) e.target.style.borderColor = COLORS.borderDim;
           }}
         />
 
         <button
           type="submit"
-          disabled={loading || !code.trim()}
+          disabled={loading || !canSubmit}
           style={{
             padding: "12px 16px",
             fontSize: 12,
             fontWeight: 700,
             fontFamily: "var(--font-mono), monospace",
-            background: loading || !code.trim() ? COLORS.borderDim : COLORS.accent,
+            background: loading || !canSubmit ? COLORS.borderDim : COLORS.accent,
             border: "none",
             color: "#000",
             letterSpacing: "0.1em",
             textTransform: "uppercase",
-            cursor: loading || !code.trim() ? "not-allowed" : "pointer",
+            cursor: loading || !canSubmit ? "not-allowed" : "pointer",
             transition: "background 0.15s",
           }}
         >
-          {loading ? "VERIFYING..." : "ENTER"}
+          {loading ? "SIGNING IN..." : "SIGN IN"}
         </button>
       </form>
 
@@ -169,17 +183,6 @@ export default function InviteCodeForm() {
           {error}
         </div>
       )}
-
-      <div
-        style={{
-          fontFamily: "var(--font-mono), monospace",
-          fontSize: 10,
-          color: COLORS.textMuted,
-          letterSpacing: "0.06em",
-        }}
-      >
-        Invite code required for access
-      </div>
     </div>
   );
 }

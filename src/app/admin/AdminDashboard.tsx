@@ -3,7 +3,6 @@
 import { useRouter } from "next/navigation";
 import { COLORS } from "@/lib/constants";
 import UserTable from "@/components/admin/UserTable";
-import InviteCodeManager from "@/components/admin/InviteCodeManager";
 
 interface AdminDashboardProps {
   userName: string;
@@ -90,7 +89,6 @@ export default function AdminDashboard({ userName }: AdminDashboardProps) {
 
       {/* Content */}
       <div style={{ padding: 20, display: "flex", flexDirection: "column", gap: 40 }}>
-        <InviteCodeManager />
         <UserTable />
       </div>
     </div>

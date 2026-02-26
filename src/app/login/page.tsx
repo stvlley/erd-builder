@@ -1,5 +1,5 @@
-import InviteCodeForm from "@/components/auth/InviteCodeForm";
+import LoginForm from "@/components/auth/LoginForm";
 
 export default function LoginPage() {
-  return <InviteCodeForm />;
+  return <LoginForm />;
 }
