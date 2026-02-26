@@ -1,8 +1,9 @@
-import { ERDState, ERDAction } from "@/types/erd";
+import { ERDState, ERDAction, Table } from "@/types/erd";
 
 export const initialState: ERDState = {
   tables: {},
   relationships: [],
+  customFieldDefinitions: [],
   selectedTableId: null,
   hoveredTableId: null,
   hoveredField: null,
@@ -32,6 +33,7 @@ export function erdReducer(state: ERDState, action: ERDAction): ERDState {
         ...initialState,
         tables: action.tables,
         relationships: action.relationships,
+        customFieldDefinitions: action.customFieldDefinitions || [],
       };
     }
 
@@ -202,6 +204,79 @@ export function erdReducer(state: ERDState, action: ERDAction): ERDState {
           [action.tableId]: { ...table, collapsed: !table.collapsed },
         },
       };
+    }
+
+    case "UPDATE_COLUMN_METADATA": {
+      const table = state.tables[action.tableId];
+      if (!table) return state;
+      return {
+        ...state,
+        tables: {
+          ...state.tables,
+          [action.tableId]: {
+            ...table,
+            columns: table.columns.map((col) =>
+              col.id === action.columnId
+                ? {
+                    ...col,
+                    ...(action.description !== undefined && { description: action.description }),
+                    ...(action.metadata !== undefined && { metadata: action.metadata }),
+                  }
+                : col
+            ),
+          },
+        },
+      };
+    }
+
+    case "ADD_CUSTOM_FIELD":
+      return {
+        ...state,
+        customFieldDefinitions: [...state.customFieldDefinitions, action.field],
+      };
+
+    case "RENAME_CUSTOM_FIELD": {
+      const oldDef = state.customFieldDefinitions.find((f) => f.id === action.fieldId);
+      if (!oldDef) return state;
+      const oldName = oldDef.name;
+      const newName = action.newName;
+      // Rename definition
+      const updatedDefs = state.customFieldDefinitions.map((f) =>
+        f.id === action.fieldId ? { ...f, name: newName } : f
+      );
+      // Migrate key in all columns' metadata
+      const updatedTables: Record<string, Table> = {};
+      for (const [tid, table] of Object.entries(state.tables)) {
+        updatedTables[tid] = {
+          ...table,
+          columns: table.columns.map((col) => {
+            if (!col.metadata || !(oldName in col.metadata)) return col;
+            const { [oldName]: value, ...rest } = col.metadata;
+            return { ...col, metadata: { ...rest, [newName]: value } };
+          }),
+        };
+      }
+      return { ...state, customFieldDefinitions: updatedDefs, tables: updatedTables };
+    }
+
+    case "DELETE_CUSTOM_FIELD": {
+      const defToDelete = state.customFieldDefinitions.find((f) => f.id === action.fieldId);
+      if (!defToDelete) return state;
+      const fieldName = defToDelete.name;
+      const filteredDefs = state.customFieldDefinitions.filter((f) => f.id !== action.fieldId);
+      // Remove key from all columns' metadata
+      const cleanedTables: Record<string, Table> = {};
+      for (const [tid, tbl] of Object.entries(state.tables)) {
+        cleanedTables[tid] = {
+          ...tbl,
+          columns: tbl.columns.map((col) => {
+            if (!col.metadata || !(fieldName in col.metadata)) return col;
+            const { [fieldName]: _, ...rest } = col.metadata;
+            return { ...col, metadata: rest };
+          }),
+        };
+      }
+      return { ...state, customFieldDefinitions: filteredDefs, tables: cleanedTables };
     }
 
     case "SET_SIDEBAR":

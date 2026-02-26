@@ -7,6 +7,7 @@ import { inferRelationships, markForeignKeys } from "@/lib/infer-relationships";
 import { COLORS } from "@/lib/constants";
 import { exportSVG } from "@/lib/export-svg";
 import type { SaveStatus } from "@/lib/erd-persistence";
+import Link from "next/link";
 
 interface ToolbarProps {
   tableCount: number;
@@ -16,6 +17,7 @@ interface ToolbarProps {
   state: ERDState;
   onSave: () => void;
   saveStatus: SaveStatus;
+  erdId: string;
 }
 
 export default function Toolbar({
@@ -26,6 +28,7 @@ export default function Toolbar({
   state,
   onSave,
   saveStatus,
+  erdId,
 }: ToolbarProps) {
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -147,6 +150,18 @@ export default function Toolbar({
       >
         EXPORT SVG
       </button>
+      <Link
+        href={`/erd/${erdId}/columns`}
+        style={{
+          ...btnStyle,
+          textDecoration: "none",
+          display: "inline-block",
+          borderColor: COLORS.accent + "66",
+          color: COLORS.accent,
+        }}
+      >
+        COLUMN DICTIONARY
+      </Link>
       <button
         style={btnStyle}
         onClick={onSave}

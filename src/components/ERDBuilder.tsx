@@ -96,6 +96,7 @@ export default function ERDBuilder({ erdId, userName, userRole }: ERDBuilderProp
           state={state}
           onSave={saveNow}
           saveStatus={saveStatus}
+          erdId={erdId}
         />
       )}
 

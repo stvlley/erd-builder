@@ -4,6 +4,13 @@ export interface Column {
   type: string;
   isPrimaryKey: boolean;
   isForeignKey: boolean;
+  description?: string;
+  metadata?: Record<string, string>;
+}
+
+export interface CustomFieldDefinition {
+  id: string;
+  name: string;
 }
 
 export interface Table {
@@ -36,6 +43,7 @@ export type SidebarMode =
 export interface ERDState {
   tables: Record<string, Table>;
   relationships: Relationship[];
+  customFieldDefinitions: CustomFieldDefinition[];
   selectedTableId: string | null;
   hoveredTableId: string | null;
   hoveredField: { tableId: string; columnId: string; suffix: string } | null;
@@ -47,11 +55,12 @@ export interface ERDState {
 export interface SerializableERDState {
   tables: Record<string, Table>;
   relationships: Relationship[];
+  customFieldDefinitions?: CustomFieldDefinition[];
 }
 
 export type ERDAction =
   | { type: "LOAD_TABLES"; tables: Record<string, Table>; relationships: Relationship[] }
-  | { type: "LOAD_FROM_DB"; tables: Record<string, Table>; relationships: Relationship[] }
+  | { type: "LOAD_FROM_DB"; tables: Record<string, Table>; relationships: Relationship[]; customFieldDefinitions?: CustomFieldDefinition[] }
   | { type: "GENERATE_RELATIONSHIPS"; relationships: Relationship[]; tables: Record<string, Table> }
   | { type: "MOVE_TABLE"; tableId: string; x: number; y: number }
   | { type: "SET_DRAGGING"; dragging: ERDState["dragging"] }
@@ -70,4 +79,8 @@ export type ERDAction =
   | { type: "DELETE_RELATIONSHIP"; relationshipId: string }
   | { type: "TOGGLE_COLLAPSE"; tableId: string }
   | { type: "SET_SIDEBAR"; sidebar: SidebarMode }
+  | { type: "UPDATE_COLUMN_METADATA"; tableId: string; columnId: string; description?: string; metadata?: Record<string, string> }
+  | { type: "ADD_CUSTOM_FIELD"; field: CustomFieldDefinition }
+  | { type: "RENAME_CUSTOM_FIELD"; fieldId: string; newName: string }
+  | { type: "DELETE_CUSTOM_FIELD"; fieldId: string }
   | { type: "RESET" };

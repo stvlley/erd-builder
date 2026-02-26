@@ -47,7 +47,7 @@ export default function RelationshipLine({
       <path
         d={path}
         fill="none"
-        stroke={isHot ? COLORS.accent : isDimmed ? "#333333" : COLORS.borderDim}
+        stroke={isHot ? "#d4683a" : isDimmed ? "#333333" : COLORS.borderDim}
         strokeWidth={isHot ? 2 : 1.5}
         strokeDasharray={isHot ? "none" : "5 4"}
         markerEnd={isHot ? "url(#arr-hot)" : "url(#arr)"}
