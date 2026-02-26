@@ -145,7 +145,7 @@ export default function ColumnTable({
     color: COLORS.textMuted,
     textAlign: "left",
     borderBottom: `2px solid ${COLORS.borderDim}`,
-    background: "#1e1e1e",
+    background: "#1a1a1c",
     cursor: "pointer",
     userSelect: "none",
     whiteSpace: "nowrap",
@@ -158,7 +158,7 @@ export default function ColumnTable({
     padding: "6px 12px",
     fontSize: 12,
     fontFamily: "var(--font-mono), monospace",
-    borderBottom: `1px solid #333`,
+    borderBottom: `1px solid #2e2e30`,
     verticalAlign: "middle",
   };
 
@@ -315,7 +315,7 @@ function TableGroup({
       <tr
         onClick={onToggle}
         style={{
-          background: "#222",
+          background: "#1e1e20",
           cursor: "pointer",
           userSelect: "none",
         }}
@@ -323,7 +323,7 @@ function TableGroup({
           (e.currentTarget as HTMLTableRowElement).style.background = "#282828";
         }}
         onMouseLeave={(e) => {
-          (e.currentTarget as HTMLTableRowElement).style.background = "#222";
+          (e.currentTarget as HTMLTableRowElement).style.background = "#1e1e20";
         }}
       >
         <td
@@ -370,12 +370,12 @@ function TableGroup({
         columns.map((col) => (
           <tr
             key={`${col.tableId}-${col.id}`}
-            style={{ background: "#2a2a2a" }}
+            style={{ background: "#232325" }}
             onMouseEnter={(e) => {
-              (e.currentTarget as HTMLTableRowElement).style.background = "#303030";
+              (e.currentTarget as HTMLTableRowElement).style.background = "#2a2a2c";
             }}
             onMouseLeave={(e) => {
-              (e.currentTarget as HTMLTableRowElement).style.background = "#2a2a2a";
+              (e.currentTarget as HTMLTableRowElement).style.background = "#232325";
             }}
           >
             <td style={{ ...tdStyle, paddingLeft: 32 }}>
@@ -427,7 +427,7 @@ function TableGroup({
                 }
                 onFocus={(e) => {
                   e.currentTarget.style.borderColor = COLORS.accent;
-                  e.currentTarget.style.background = "#1a1a1a";
+                  e.currentTarget.style.background = "#141416";
                 }}
                 onBlur={(e) => {
                   e.currentTarget.style.borderColor = "transparent";
@@ -452,7 +452,7 @@ function TableGroup({
                   }
                   onFocus={(e) => {
                     e.currentTarget.style.borderColor = COLORS.accent;
-                    e.currentTarget.style.background = "#1a1a1a";
+                    e.currentTarget.style.background = "#141416";
                   }}
                   onBlur={(e) => {
                     e.currentTarget.style.borderColor = "transparent";

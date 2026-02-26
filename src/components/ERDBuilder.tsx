@@ -53,7 +53,7 @@ export default function ERDBuilder({ erdId, userName, userRole }: ERDBuilderProp
           alignItems: "center",
           justifyContent: "center",
           height: "100vh",
-          background: "#242424",
+          background: "#1c1c1e",
           color: "#888",
           fontFamily: "var(--font-mono), monospace",
           fontSize: 12,

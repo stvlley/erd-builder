@@ -6,6 +6,7 @@ export interface Column {
   isForeignKey: boolean;
   description?: string;
   metadata?: Record<string, string>;
+  collapsed?: boolean;
 }
 
 export interface CustomFieldDefinition {
@@ -78,6 +79,7 @@ export type ERDAction =
   | { type: "UPDATE_RELATIONSHIP"; relationshipId: string; updates: Partial<Relationship> }
   | { type: "DELETE_RELATIONSHIP"; relationshipId: string }
   | { type: "TOGGLE_COLLAPSE"; tableId: string }
+  | { type: "TOGGLE_COLUMN_COLLAPSE"; tableId: string; columnId: string }
   | { type: "SET_SIDEBAR"; sidebar: SidebarMode }
   | { type: "UPDATE_COLUMN_METADATA"; tableId: string; columnId: string; description?: string; metadata?: Record<string, string> }
   | { type: "ADD_CUSTOM_FIELD"; field: CustomFieldDefinition }

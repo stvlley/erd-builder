@@ -21,12 +21,17 @@ export default function RelationshipLine({
   isDimmed,
   dispatch,
 }: RelationshipLineProps) {
-  const { path, midX, midY } = getConnectorPath(
+  const connector = getConnectorPath(
     fromTable,
     relationship.fromColumnId,
     toTable,
     relationship.toColumnId
   );
+
+  // Don't render if either column is collapsed
+  if (!connector) return null;
+
+  const { path, midX, midY } = connector;
 
   return (
     <g
@@ -47,7 +52,7 @@ export default function RelationshipLine({
       <path
         d={path}
         fill="none"
-        stroke={isHot ? COLORS.accent : isDimmed ? "#333333" : COLORS.borderDim}
+        stroke={isHot ? COLORS.accent : isDimmed ? "#2e2e30" : COLORS.borderDim}
         strokeWidth={isHot ? 2 : 1.5}
         strokeDasharray={isHot ? "none" : "5 4"}
         markerEnd={isHot ? "url(#arr-hot)" : "url(#arr)"}

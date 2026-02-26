@@ -206,6 +206,23 @@ export function erdReducer(state: ERDState, action: ERDAction): ERDState {
       };
     }
 
+    case "TOGGLE_COLUMN_COLLAPSE": {
+      const table = state.tables[action.tableId];
+      if (!table) return state;
+      return {
+        ...state,
+        tables: {
+          ...state.tables,
+          [action.tableId]: {
+            ...table,
+            columns: table.columns.map((col) =>
+              col.id === action.columnId ? { ...col, collapsed: !col.collapsed } : col
+            ),
+          },
+        },
+      };
+    }
+
     case "UPDATE_COLUMN_METADATA": {
       const table = state.tables[action.tableId];
       if (!table) return state;

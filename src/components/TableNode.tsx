@@ -1,6 +1,6 @@
 import { Table, Relationship, ERDAction, ERDState } from "@/types/erd";
 import { TABLE_W, HEADER_H, ROW_H } from "@/lib/constants";
-import { getTableHeight, getFieldSuffix } from "@/lib/geometry";
+import { getTableHeight, getFieldSuffix, getCollapsedColumnCount } from "@/lib/geometry";
 import FieldRow from "./FieldRow";
 
 interface TableNodeProps {
@@ -26,6 +26,8 @@ export default function TableNode({
   dispatch,
 }: TableNodeProps) {
   const h = getTableHeight(table);
+  const collapsedCount = getCollapsedColumnCount(table);
+  const visibleColumns = table.columns.filter((c) => !c.collapsed);
 
   return (
     <g
@@ -71,7 +73,7 @@ export default function TableNode({
         y={table.y}
         width={TABLE_W}
         height={h}
-        fill="#242424"
+        fill="#1c1c1e"
         stroke={isHovered || isDragging || isSelected ? table.color : BORDER_COLOR}
         strokeWidth={isHovered || isDragging || isSelected ? 1.5 : 1}
       />
@@ -156,7 +158,7 @@ export default function TableNode({
 
       {/* Field rows — only when expanded */}
       {!table.collapsed &&
-        table.columns.map((column, idx) => {
+        visibleColumns.map((column, idx) => {
           const fy = table.y + HEADER_H + idx * ROW_H;
           const colSuffix = getFieldSuffix(column.name);
           const isActiveField =
@@ -183,11 +185,57 @@ export default function TableNode({
                 })
               }
               onMouseLeave={() => dispatch({ type: "SET_HOVERED_FIELD", field: null })}
+              onToggleCollapse={() =>
+                dispatch({
+                  type: "TOGGLE_COLUMN_COLLAPSE",
+                  tableId: table.id,
+                  columnId: column.id,
+                })
+              }
             />
           );
         })}
+
+      {/* Collapsed columns summary row */}
+      {!table.collapsed && collapsedCount > 0 && (
+        <g
+          style={{ cursor: "pointer" }}
+          onClick={(e) => {
+            e.stopPropagation();
+            // Expand all collapsed columns
+            table.columns.forEach((col) => {
+              if (col.collapsed) {
+                dispatch({
+                  type: "TOGGLE_COLUMN_COLLAPSE",
+                  tableId: table.id,
+                  columnId: col.id,
+                });
+              }
+            });
+          }}
+        >
+          <rect
+            x={table.x + 3}
+            y={table.y + HEADER_H + visibleColumns.length * ROW_H}
+            width={TABLE_W - 3}
+            height={14}
+            fill="#ffffff06"
+          />
+          <text
+            x={table.x + TABLE_W / 2}
+            y={table.y + HEADER_H + visibleColumns.length * ROW_H + 10}
+            textAnchor="middle"
+            fill="#58585c"
+            fontSize={8}
+            fontFamily="var(--font-mono), monospace"
+            letterSpacing="0.1em"
+          >
+            + {collapsedCount} HIDDEN
+          </text>
+        </g>
+      )}
     </g>
   );
 }
 
-const BORDER_COLOR = "#444444";
+const BORDER_COLOR = "#3a3a3c";

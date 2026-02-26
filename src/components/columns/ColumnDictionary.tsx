@@ -185,7 +185,7 @@ export default function ColumnDictionary({ erdId, userName }: ColumnDictionaryPr
           placeholder="Search columns, descriptions, metadata..."
           style={{
             padding: "7px 12px",
-            background: "#1a1a1a",
+            background: "#141416",
             border: `1px solid ${COLORS.borderDim}`,
             color: COLORS.text,
             fontSize: 11,
@@ -199,7 +199,7 @@ export default function ColumnDictionary({ erdId, userName }: ColumnDictionaryPr
           onChange={(e) => setTableFilter(e.target.value)}
           style={{
             padding: "7px 12px",
-            background: "#1a1a1a",
+            background: "#141416",
             border: `1px solid ${COLORS.borderDim}`,
             color: COLORS.text,
             fontSize: 11,

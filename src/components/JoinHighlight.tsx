@@ -15,7 +15,7 @@ export default function JoinHighlight({ tables, hoveredField }: JoinHighlightPro
 
   Object.entries(tables).forEach(([, table]) => {
     table.columns.forEach((col) => {
-      if (getFieldSuffix(col.name) === suffix) {
+      if (!col.collapsed && getFieldSuffix(col.name) === suffix) {
         matches.push({ tableId: table.id, table, columnId: col.id });
       }
     });
@@ -81,7 +81,7 @@ export default function JoinHighlight({ tables, hoveredField }: JoinHighlightPro
             y={l.midY - 10}
             width={52}
             height={18}
-            fill="#242424"
+            fill="#1c1c1e"
             stroke="#818CF8"
             strokeWidth={1}
           />

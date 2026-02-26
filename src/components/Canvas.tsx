@@ -170,7 +170,7 @@ export default function Canvas({ state, dispatch, svgRef }: CanvasProps) {
       ref={containerRef}
       className="flex-1"
       style={{
-        background: "#1a1a1a",
+        background: "#141416",
         overflow: "hidden",
         position: "relative",
         cursor: panning ? "grabbing" : dragging ? "grabbing" : "default",

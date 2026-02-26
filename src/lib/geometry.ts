@@ -1,15 +1,43 @@
 import { Table } from "@/types/erd";
 import { TABLE_W, ROW_H, HEADER_H } from "./constants";
 
+const COLLAPSED_ROW_H = 14;
+
+export function getVisibleColumnCount(table: Table): number {
+  return table.columns.filter((c) => !c.collapsed).length;
+}
+
+export function getCollapsedColumnCount(table: Table): number {
+  return table.columns.filter((c) => c.collapsed).length;
+}
+
 export function getTableHeight(table: Table): number {
   if (table.collapsed) return HEADER_H + 8;
-  return HEADER_H + table.columns.length * ROW_H + 8;
+  const visibleCount = getVisibleColumnCount(table);
+  const collapsedCount = getCollapsedColumnCount(table);
+  // Collapsed columns get a single compact summary row if any exist
+  const collapsedHeight = collapsedCount > 0 ? COLLAPSED_ROW_H : 0;
+  return HEADER_H + visibleCount * ROW_H + collapsedHeight + 8;
+}
+
+/** Returns the visual index of a column among visible (non-collapsed) columns */
+function getVisibleIndex(table: Table, columnId: string): number {
+  let visIdx = 0;
+  for (const col of table.columns) {
+    if (col.id === columnId) return visIdx;
+    if (!col.collapsed) visIdx++;
+  }
+  return -1;
 }
 
 export function getFieldY(table: Table, columnId: string): number {
-  const idx = table.columns.findIndex((c) => c.id === columnId);
-  if (idx === -1) return table.y + HEADER_H + 10;
-  return table.y + HEADER_H + idx * ROW_H + ROW_H / 2;
+  const col = table.columns.find((c) => c.id === columnId);
+  if (!col) return table.y + HEADER_H + 10;
+  // If column is collapsed, return -1 to signal "don't render"
+  if (col.collapsed) return -1;
+  const visIdx = getVisibleIndex(table, columnId);
+  if (visIdx === -1) return table.y + HEADER_H + 10;
+  return table.y + HEADER_H + visIdx * ROW_H + ROW_H / 2;
 }
 
 export interface ConnectorPath {
@@ -23,9 +51,13 @@ export function getConnectorPath(
   fromColumnId: string,
   toTable: Table,
   toColumnId: string
-): ConnectorPath {
+): ConnectorPath | null {
   const fy = getFieldY(fromTable, fromColumnId);
   const ty = getFieldY(toTable, toColumnId);
+
+  // If either column is collapsed, don't draw the connector
+  if (fy === -1 || ty === -1) return null;
+
   const fromCX = fromTable.x + TABLE_W / 2;
   const toCX = toTable.x + TABLE_W / 2;
 

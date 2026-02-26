@@ -10,33 +10,34 @@ export const GRID_START_X = 60;
 export const GRID_START_Y = 60;
 export const GRID_COLS = 3;
 
-// Neo-industrial palette
+// IBM i / 5250 terminal palette
 export const COLORS = {
-  bg: "#242424",
-  canvas: "#1a1a1a",
-  surface: "#2a2a2a",
-  elevated: "#333333",
-  accent: "#47a64a",
-  accentHover: "#5cb85f",
-  muted: "#adb3b7",
-  border: "#adb3b7",
-  borderDim: "#444444",
-  text: "#e8e8e8",
-  textDim: "#888888",
-  textMuted: "#666666",
-  gridDot: "#333333",
+  bg: "#1c1c1e",
+  canvas: "#141416",
+  surface: "#232325",
+  elevated: "#2e2e30",
+  accent: "#4dba50",
+  accentHover: "#5fcc62",
+  accentMuted: "#3a8c3d",
+  muted: "#7a7d80",
+  border: "#7a7d80",
+  borderDim: "#3a3a3c",
+  text: "#d4d4d4",
+  textDim: "#808084",
+  textMuted: "#58585c",
+  gridDot: "#2a2a2c",
 } as const;
 
 // Table color palette for auto-assignment
 export const TABLE_COLORS = [
-  "#47a64a", // retro green
-  "#38BDF8", // sky blue
-  "#34D399", // emerald
-  "#C084FC", // purple
-  "#FB923C", // orange
-  "#F472B6", // pink
-  "#A78BFA", // violet
-  "#FBBF24", // amber
-  "#2DD4BF", // teal
-  "#818CF8", // indigo
+  "#4dba50", // terminal green
+  "#5b9bd5", // steel blue
+  "#c9a84c", // amber
+  "#9b7ec8", // muted purple
+  "#c87941", // copper
+  "#b85c78", // dusty rose
+  "#6ba3a0", // teal grey
+  "#8b8bca", // slate violet
+  "#4ca688", // jade
+  "#b0864c", // brass
 ] as const;

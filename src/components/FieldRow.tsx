@@ -11,6 +11,7 @@ interface FieldRowProps {
   isJoinHighlight: boolean;
   onMouseEnter: () => void;
   onMouseLeave: () => void;
+  onToggleCollapse: () => void;
 }
 
 export default function FieldRow({
@@ -22,6 +23,7 @@ export default function FieldRow({
   isJoinHighlight,
   onMouseEnter,
   onMouseLeave,
+  onToggleCollapse,
 }: FieldRowProps) {
   return (
     <g
@@ -65,7 +67,7 @@ export default function FieldRow({
         <text
           x={tableX + 8}
           y={fieldY + 14}
-          fill="#888888"
+          fill="#808084"
           fontSize={8}
           fontFamily="var(--font-mono), monospace"
         >
@@ -81,10 +83,10 @@ export default function FieldRow({
           isActiveField || isJoinHighlight
             ? "#818CF8"
             : column.isPrimaryKey
-              ? "#e8e8e8"
+              ? "#d4d4d4"
               : column.isForeignKey
-                ? "#adb3b7"
-                : "#888888"
+                ? "#7a7d80"
+                : "#808084"
         }
         fontSize={10}
         fontFamily="var(--font-mono), monospace"
@@ -96,7 +98,7 @@ export default function FieldRow({
 
       {/* Type */}
       <text
-        x={tableX + TABLE_W - 8}
+        x={tableX + TABLE_W - 24}
         y={fieldY + 15}
         textAnchor="end"
         fill={column.type === "NUM" ? "#34D39868" : "#38BDF858"}
@@ -105,6 +107,34 @@ export default function FieldRow({
       >
         {column.type}
       </text>
+
+      {/* Collapse toggle — small "x" on far right, visible on hover via opacity */}
+      <g
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggleCollapse();
+        }}
+        style={{ cursor: "pointer" }}
+        opacity={isActiveField ? 0.6 : 0}
+      >
+        <rect
+          x={tableX + TABLE_W - 18}
+          y={fieldY + 2}
+          width={14}
+          height={ROW_H - 4}
+          fill="transparent"
+        />
+        <text
+          x={tableX + TABLE_W - 11}
+          y={fieldY + 15}
+          textAnchor="middle"
+          fill="#666"
+          fontSize={8}
+          fontFamily="var(--font-mono), monospace"
+        >
+          ×
+        </text>
+      </g>
     </g>
   );
 }

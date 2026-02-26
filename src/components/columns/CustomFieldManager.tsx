@@ -119,7 +119,7 @@ export default function CustomFieldManager({
                     alignItems: "center",
                     gap: 8,
                     padding: "8px 0",
-                    borderBottom: `1px solid #333`,
+                    borderBottom: `1px solid #2e2e30`,
                   }}
                 >
                   {editingId === def.id ? (
@@ -138,7 +138,7 @@ export default function CustomFieldManager({
                         style={{
                           flex: 1,
                           padding: "4px 8px",
-                          background: "#1a1a1a",
+                          background: "#141416",
                           border: `1px solid ${COLORS.accent}`,
                           color: COLORS.text,
                           fontSize: 12,
@@ -249,7 +249,7 @@ export default function CustomFieldManager({
               style={{
                 flex: 1,
                 padding: "8px 12px",
-                background: "#1a1a1a",
+                background: "#141416",
                 border: `1px solid ${COLORS.borderDim}`,
                 color: COLORS.text,
                 fontSize: 12,
