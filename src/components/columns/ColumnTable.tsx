@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { Column, CustomFieldDefinition, ERDAction } from "@/types/erd";
 import { COLORS } from "@/lib/constants";
 
@@ -26,6 +26,7 @@ export default function ColumnTable({
 }: ColumnTableProps) {
   const [sortKey, setSortKey] = useState<SortKey>("tableName");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [collapsedTables, setCollapsedTables] = useState<Set<string>>(new Set());
 
   const handleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -36,31 +37,76 @@ export default function ColumnTable({
     }
   };
 
-  const sorted = [...columns].sort((a, b) => {
-    let aVal: string;
-    let bVal: string;
+  const toggleTable = (tableId: string) => {
+    setCollapsedTables((prev) => {
+      const next = new Set(prev);
+      if (next.has(tableId)) {
+        next.delete(tableId);
+      } else {
+        next.add(tableId);
+      }
+      return next;
+    });
+  };
 
-    if (sortKey === "tableName") {
-      aVal = a.tableName;
-      bVal = b.tableName;
-    } else if (sortKey === "name") {
-      aVal = a.name;
-      bVal = b.name;
-    } else if (sortKey === "type") {
-      aVal = a.type;
-      bVal = b.type;
-    } else if (sortKey === "description") {
-      aVal = a.description || "";
-      bVal = b.description || "";
-    } else {
-      // Custom field
-      aVal = a.metadata?.[sortKey] || "";
-      bVal = b.metadata?.[sortKey] || "";
+  const collapseAll = () => {
+    const allIds = new Set(columns.map((c) => c.tableId));
+    setCollapsedTables(allIds);
+  };
+
+  const expandAll = () => {
+    setCollapsedTables(new Set());
+  };
+
+  const sorted = useMemo(() => {
+    return [...columns].sort((a, b) => {
+      let aVal: string;
+      let bVal: string;
+
+      if (sortKey === "tableName") {
+        aVal = a.tableName;
+        bVal = b.tableName;
+      } else if (sortKey === "name") {
+        aVal = a.name;
+        bVal = b.name;
+      } else if (sortKey === "type") {
+        aVal = a.type;
+        bVal = b.type;
+      } else if (sortKey === "description") {
+        aVal = a.description || "";
+        bVal = b.description || "";
+      } else {
+        aVal = a.metadata?.[sortKey] || "";
+        bVal = b.metadata?.[sortKey] || "";
+      }
+
+      const cmp = aVal.localeCompare(bVal);
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+  }, [columns, sortKey, sortDir]);
+
+  // Group sorted columns by table
+  const grouped = useMemo(() => {
+    const groups: { tableId: string; tableName: string; tableColor: string; columns: FlatColumn[] }[] = [];
+    const seen = new Map<string, number>();
+
+    for (const col of sorted) {
+      const idx = seen.get(col.tableId);
+      if (idx !== undefined) {
+        groups[idx].columns.push(col);
+      } else {
+        seen.set(col.tableId, groups.length);
+        groups.push({
+          tableId: col.tableId,
+          tableName: col.tableName,
+          tableColor: col.tableColor,
+          columns: [col],
+        });
+      }
     }
 
-    const cmp = aVal.localeCompare(bVal);
-    return sortDir === "asc" ? cmp : -cmp;
-  });
+    return groups;
+  }, [sorted]);
 
   const handleDescriptionChange = useCallback(
     (tableId: string, columnId: string, value: string) => {
@@ -86,6 +132,9 @@ export default function ColumnTable({
     [dispatch]
   );
 
+  const totalCustomCols = customFieldDefinitions.length;
+  const totalCols = 6 + totalCustomCols; // Table, Column, Type, PK, FK, Description + custom
+
   const thStyle: React.CSSProperties = {
     padding: "10px 12px",
     fontFamily: "var(--font-mono), monospace",
@@ -102,7 +151,7 @@ export default function ColumnTable({
     whiteSpace: "nowrap",
     position: "sticky",
     top: 0,
-    zIndex: 1,
+    zIndex: 2,
   };
 
   const tdStyle: React.CSSProperties = {
@@ -148,6 +197,8 @@ export default function ColumnTable({
     );
   }
 
+  const anyCollapsed = collapsedTables.size > 0;
+
   return (
     <table
       style={{
@@ -159,7 +210,28 @@ export default function ColumnTable({
       <thead>
         <tr>
           <th style={thStyle} onClick={() => handleSort("tableName")}>
-            Table{sortIndicator("tableName")}
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  anyCollapsed ? expandAll() : collapseAll();
+                }}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: COLORS.textMuted,
+                  cursor: "pointer",
+                  padding: 0,
+                  fontSize: 10,
+                  fontFamily: "var(--font-mono), monospace",
+                  lineHeight: 1,
+                }}
+                title={anyCollapsed ? "Expand all" : "Collapse all"}
+              >
+                {anyCollapsed ? "\u25B6" : "\u25BC"}
+              </button>
+              Table{sortIndicator("tableName")}
+            </span>
           </th>
           <th style={thStyle} onClick={() => handleSort("name")}>
             Column{sortIndicator("name")}
@@ -184,7 +256,118 @@ export default function ColumnTable({
         </tr>
       </thead>
       <tbody>
-        {sorted.map((col) => (
+        {grouped.map((group) => {
+          const isCollapsed = collapsedTables.has(group.tableId);
+          return (
+            <TableGroup
+              key={group.tableId}
+              tableId={group.tableId}
+              tableName={group.tableName}
+              tableColor={group.tableColor}
+              columns={group.columns}
+              isCollapsed={isCollapsed}
+              onToggle={() => toggleTable(group.tableId)}
+              totalCols={totalCols}
+              customFieldDefinitions={customFieldDefinitions}
+              tdStyle={tdStyle}
+              inputStyle={inputStyle}
+              onDescriptionChange={handleDescriptionChange}
+              onMetadataChange={handleMetadataChange}
+            />
+          );
+        })}
+      </tbody>
+    </table>
+  );
+}
+
+// Extracted to avoid re-creating inline functions per row in the main component
+function TableGroup({
+  tableId,
+  tableName,
+  tableColor,
+  columns,
+  isCollapsed,
+  onToggle,
+  totalCols,
+  customFieldDefinitions,
+  tdStyle,
+  inputStyle,
+  onDescriptionChange,
+  onMetadataChange,
+}: {
+  tableId: string;
+  tableName: string;
+  tableColor: string;
+  columns: FlatColumn[];
+  isCollapsed: boolean;
+  onToggle: () => void;
+  totalCols: number;
+  customFieldDefinitions: CustomFieldDefinition[];
+  tdStyle: React.CSSProperties;
+  inputStyle: React.CSSProperties;
+  onDescriptionChange: (tableId: string, columnId: string, value: string) => void;
+  onMetadataChange: (tableId: string, columnId: string, fieldName: string, value: string, currentMetadata?: Record<string, string>) => void;
+}) {
+  return (
+    <>
+      {/* Table group header */}
+      <tr
+        onClick={onToggle}
+        style={{
+          background: "#222",
+          cursor: "pointer",
+          userSelect: "none",
+        }}
+        onMouseEnter={(e) => {
+          (e.currentTarget as HTMLTableRowElement).style.background = "#282828";
+        }}
+        onMouseLeave={(e) => {
+          (e.currentTarget as HTMLTableRowElement).style.background = "#222";
+        }}
+      >
+        <td
+          colSpan={totalCols}
+          style={{
+            padding: "8px 12px",
+            borderBottom: `1px solid ${COLORS.borderDim}`,
+            fontFamily: "var(--font-mono), monospace",
+            fontSize: 11,
+            fontWeight: 700,
+            letterSpacing: "0.06em",
+          }}
+        >
+          <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+            <span style={{ color: COLORS.textMuted, fontSize: 9 }}>
+              {isCollapsed ? "\u25B6" : "\u25BC"}
+            </span>
+            <span
+              style={{
+                width: 8,
+                height: 8,
+                background: tableColor,
+                display: "inline-block",
+                flexShrink: 0,
+              }}
+            />
+            <span style={{ color: COLORS.text }}>{tableName}</span>
+            <span
+              style={{
+                color: COLORS.textMuted,
+                fontSize: 9,
+                fontWeight: 400,
+                letterSpacing: "0.1em",
+              }}
+            >
+              {columns.length} {columns.length === 1 ? "COLUMN" : "COLUMNS"}
+            </span>
+          </span>
+        </td>
+      </tr>
+
+      {/* Column rows */}
+      {!isCollapsed &&
+        columns.map((col) => (
           <tr
             key={`${col.tableId}-${col.id}`}
             style={{ background: "#2a2a2a" }}
@@ -195,19 +378,8 @@ export default function ColumnTable({
               (e.currentTarget as HTMLTableRowElement).style.background = "#2a2a2a";
             }}
           >
-            <td style={tdStyle}>
-              <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                <span
-                  style={{
-                    width: 8,
-                    height: 8,
-                    background: col.tableColor,
-                    display: "inline-block",
-                    flexShrink: 0,
-                  }}
-                />
-                <span style={{ color: COLORS.text, fontSize: 11 }}>{col.tableName}</span>
-              </span>
+            <td style={{ ...tdStyle, paddingLeft: 32 }}>
+              <span style={{ color: COLORS.textMuted, fontSize: 10 }}>{col.tableName}</span>
             </td>
             <td style={{ ...tdStyle, color: COLORS.text, fontWeight: 600 }}>
               {col.name}
@@ -251,7 +423,7 @@ export default function ColumnTable({
                 value={col.description || ""}
                 placeholder="Add description..."
                 onChange={(e) =>
-                  handleDescriptionChange(col.tableId, col.id, e.target.value)
+                  onDescriptionChange(col.tableId, col.id, e.target.value)
                 }
                 onFocus={(e) => {
                   e.currentTarget.style.borderColor = COLORS.accent;
@@ -270,7 +442,7 @@ export default function ColumnTable({
                   value={col.metadata?.[def.name] || ""}
                   placeholder={`Add ${def.name.toLowerCase()}...`}
                   onChange={(e) =>
-                    handleMetadataChange(
+                    onMetadataChange(
                       col.tableId,
                       col.id,
                       def.name,
@@ -291,7 +463,6 @@ export default function ColumnTable({
             ))}
           </tr>
         ))}
-      </tbody>
-    </table>
+    </>
   );
 }

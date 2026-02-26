@@ -182,7 +182,7 @@ export default function ColumnDictionary({ erdId, userName }: ColumnDictionaryPr
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search columns..."
+          placeholder="Search columns, descriptions, metadata..."
           style={{
             padding: "7px 12px",
             background: "#1a1a1a",
@@ -190,7 +190,7 @@ export default function ColumnDictionary({ erdId, userName }: ColumnDictionaryPr
             color: COLORS.text,
             fontSize: 11,
             fontFamily: "var(--font-mono), monospace",
-            width: 260,
+            width: 320,
             outline: "none",
           }}
         />
