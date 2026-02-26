@@ -47,7 +47,7 @@ export default function RelationshipLine({
       <path
         d={path}
         fill="none"
-        stroke={isHot ? "#d4683a" : isDimmed ? "#333333" : COLORS.borderDim}
+        stroke={isHot ? COLORS.accent : isDimmed ? "#333333" : COLORS.borderDim}
         strokeWidth={isHot ? 2 : 1.5}
         strokeDasharray={isHot ? "none" : "5 4"}
         markerEnd={isHot ? "url(#arr-hot)" : "url(#arr)"}
@@ -63,14 +63,14 @@ export default function RelationshipLine({
             width={44}
             height={18}
             fill={COLORS.bg}
-            stroke="#d4683a"
+            stroke={COLORS.accent}
             strokeWidth={1}
           />
           <text
             x={midX}
             y={midY + 4}
             textAnchor="middle"
-            fill="#d4683a"
+            fill={COLORS.accent}
             fontSize={9}
             fontFamily="var(--font-mono), monospace"
             letterSpacing="0.1em"

@@ -7,7 +7,7 @@ export default function SVGDefs() {
         <polygon points="0 0,8 3,0 6" fill={COLORS.borderDim} />
       </marker>
       <marker id="arr-hot" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
-        <polygon points="0 0,8 3,0 6" fill="#d4683a" />
+        <polygon points="0 0,8 3,0 6" fill={COLORS.accent} />
       </marker>
       <marker id="arr-join" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto">
         <polygon points="0 0,8 3,0 6" fill="#818CF8" />

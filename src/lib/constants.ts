@@ -16,8 +16,8 @@ export const COLORS = {
   canvas: "#1a1a1a",
   surface: "#2a2a2a",
   elevated: "#333333",
-  accent: "#ff7235",
-  accentHover: "#ff8a57",
+  accent: "#2ecc40",
+  accentHover: "#5fd96a",
   muted: "#adb3b7",
   border: "#adb3b7",
   borderDim: "#444444",
@@ -29,7 +29,7 @@ export const COLORS = {
 
 // Table color palette for auto-assignment
 export const TABLE_COLORS = [
-  "#ff7235", // burnt orange
+  "#2ecc40", // phosphor green
   "#38BDF8", // sky blue
   "#34D399", // emerald
   "#C084FC", // purple

@@ -1,5 +1,5 @@
 import { Column } from "@/types/erd";
-import { TABLE_W, ROW_H } from "@/lib/constants";
+import { TABLE_W, ROW_H, COLORS } from "@/lib/constants";
 
 interface FieldRowProps {
   column: Column;
@@ -55,7 +55,7 @@ export default function FieldRow({
 
       {/* PK icon */}
       {column.isPrimaryKey && (
-        <text x={tableX + 7} y={fieldY + 15} fill="#ff7235" fontSize={10}>
+        <text x={tableX + 7} y={fieldY + 15} fill={COLORS.accent} fontSize={10}>
           ⬡
         </text>
       )}
