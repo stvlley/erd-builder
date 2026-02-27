@@ -85,8 +85,8 @@ export function getConnectorPath(
 }
 
 export function getFieldSuffix(name: string): string {
-  // For legacy prefix-style names like O0BCTN → BCTN
-  if (/^[A-Z]\d/.test(name) && name.length > 2) {
+  // For legacy prefix-style names like O0BCTN → BCTN, PDDIV → DIV
+  if (/^[A-Z][A-Z0-9]/.test(name) && name.length > 2) {
     return name.slice(2);
   }
   return name;
