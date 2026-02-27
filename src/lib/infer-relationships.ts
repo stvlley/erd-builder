@@ -9,8 +9,8 @@ interface Candidate {
 }
 
 function getColumnSuffix(name: string): string {
-  // Strip first 2 chars if column starts with letter+digit (AS/400 style)
-  if (/^[A-Z]\d/i.test(name) && name.length > 2) {
+  // Strip first 2 chars for AS/400 style prefixes (letter + letter/digit, e.g. O2, PD, PB)
+  if (/^[A-Z][A-Z0-9]/.test(name) && name.length > 2) {
     return name.slice(2).toLowerCase();
   }
   return name.toLowerCase();
