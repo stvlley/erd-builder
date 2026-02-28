@@ -62,10 +62,25 @@ export default function GridView({ state, dispatch }: GridViewProps) {
   const query = search.trim().toLowerCase();
   const hasSearch = query.length > 0;
 
-  const isSearchMatch = useCallback(
+  const isNameMatch = useCallback(
     (name: string) => {
       if (!hasSearch) return false;
       return name.toLowerCase().includes(query);
+    },
+    [hasSearch, query]
+  );
+
+  const isColSearchMatch = useCallback(
+    (col: { name: string; description?: string; metadata?: Record<string, string> }) => {
+      if (!hasSearch) return false;
+      if (col.name.toLowerCase().includes(query)) return true;
+      if (col.description && col.description.toLowerCase().includes(query)) return true;
+      if (col.metadata) {
+        for (const val of Object.values(col.metadata)) {
+          if (val.toLowerCase().includes(query)) return true;
+        }
+      }
+      return false;
     },
     [hasSearch, query]
   );
@@ -78,12 +93,12 @@ export default function GridView({ state, dispatch }: GridViewProps) {
       let count = 0;
       if (table.name.toLowerCase().includes(query)) count++;
       for (const col of table.columns) {
-        if (col.name.toLowerCase().includes(query)) count++;
+        if (isColSearchMatch(col)) count++;
       }
       counts.set(table.id, count);
     }
     return counts;
-  }, [hasSearch, query, tableList]);
+  }, [hasSearch, query, tableList, isColSearchMatch]);
 
   // Total search match count
   const totalMatches = useMemo(() => {
@@ -119,7 +134,7 @@ export default function GridView({ state, dispatch }: GridViewProps) {
           type="text"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search columns..."
+          placeholder="Search columns, descriptions, metadata..."
           style={{
             padding: "6px 12px",
             background: COLORS.canvas,
@@ -182,7 +197,7 @@ export default function GridView({ state, dispatch }: GridViewProps) {
         >
           {tableList.map((table) => {
             const tableHasMatches = tableMatchCount ? (tableMatchCount.get(table.id) || 0) > 0 : true;
-            const tableNameMatch = hasSearch && isSearchMatch(table.name);
+            const tableNameMatch = hasSearch && isNameMatch(table.name);
 
             return (
               <div
@@ -239,7 +254,7 @@ export default function GridView({ state, dispatch }: GridViewProps) {
                       const highlighted = isHighlighted(table.id, col.id);
                       const isSource = isHoveredCol(table.id, col.id);
                       const hasRelationship = relatedMap.has(`${table.id}:${col.id}`);
-                      const searchMatch = hasSearch && isSearchMatch(col.name);
+                      const searchMatch = hasSearch && isColSearchMatch(col);
 
                       return (
                         <div
@@ -301,24 +316,45 @@ export default function GridView({ state, dispatch }: GridViewProps) {
                             {col.isPrimaryKey ? "PK" : col.isForeignKey ? "FK" : ""}
                           </span>
 
-                          {/* Column name */}
+                          {/* Column name + description */}
                           <span
                             style={{
                               flex: 1,
-                              color: highlighted
-                                ? COLORS.accent
-                                : searchMatch
-                                ? COLORS.accent
-                                : col.isPrimaryKey
-                                ? COLORS.text
-                                : COLORS.textDim,
-                              fontWeight:
-                                col.isPrimaryKey || highlighted || searchMatch
-                                  ? 700
-                                  : 400,
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: 1,
                             }}
                           >
-                            {col.name}
+                            <span
+                              style={{
+                                color: highlighted
+                                  ? COLORS.accent
+                                  : searchMatch
+                                  ? COLORS.accent
+                                  : col.isPrimaryKey
+                                  ? COLORS.text
+                                  : COLORS.textDim,
+                                fontWeight:
+                                  col.isPrimaryKey || highlighted || searchMatch
+                                    ? 700
+                                    : 400,
+                              }}
+                            >
+                              {col.name}
+                            </span>
+                            {col.description && (
+                              <span
+                                style={{
+                                  fontSize: 8,
+                                  color: searchMatch && col.description.toLowerCase().includes(query)
+                                    ? COLORS.accent + "cc"
+                                    : COLORS.textMuted,
+                                  lineHeight: 1.2,
+                                }}
+                              >
+                                {col.description}
+                              </span>
+                            )}
                           </span>
 
                           {/* Type */}

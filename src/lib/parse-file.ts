@@ -87,17 +87,20 @@ function parseCSV(text: string): ParsedFile["columns"] {
   }));
 }
 
-async function parseExcel(buffer: ArrayBuffer): Promise<ParsedFile[]> {
+async function parseExcel(buffer: ArrayBuffer, baseName: string): Promise<ParsedFile[]> {
   // Dynamic import to avoid bundling xlsx at module level
   const XLSX = await import("xlsx");
   const workbook = XLSX.read(buffer, { type: "array" });
   const results: ParsedFile[] = [];
+  const multiSheet = workbook.SheetNames.length > 1;
 
   for (const sheetName of workbook.SheetNames) {
     const sheet = workbook.Sheets[sheetName];
     const json = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet);
     if (json.length === 0) continue;
 
+    // Use file name; append sheet name only for multi-sheet workbooks
+    const tableName = multiSheet ? `${baseName}_${sheetName.toUpperCase()}` : baseName;
     const rowFields = Object.keys(json[0]);
 
     const schema = isSchemaDefinition(rowFields);
@@ -109,14 +112,14 @@ async function parseExcel(buffer: ArrayBuffer): Promise<ParsedFile[]> {
         }))
         .filter((c) => c.name !== "");
       if (columns.length > 0) {
-        results.push({ fileName: sheetName, columns });
+        results.push({ fileName: tableName, columns });
       }
     } else {
       const columns = rowFields.map((name) => ({
         name,
         type: inferType(json.map((row) => String(row[name] ?? ""))),
       }));
-      results.push({ fileName: sheetName, columns });
+      results.push({ fileName: tableName, columns });
     }
   }
 
@@ -137,12 +140,14 @@ export async function parseFile(file: File): Promise<ParsedFile[]> {
     const text = await file.text();
     const columns = parseCSV(text);
     console.log(`[ERD] Parsed CSV "${file.name}": ${columns.length} columns`, columns);
-    return [{ fileName: file.name.replace(/\.\w+$/, ""), columns }];
+    const baseName = file.name.replace(/\.\w+$/, "").toUpperCase();
+    return [{ fileName: baseName, columns }];
   }
 
   if (ext === "xlsx" || ext === "xls") {
     const buffer = await file.arrayBuffer();
-    const results = await parseExcel(buffer);
+    const baseName = file.name.replace(/\.\w+$/, "").toUpperCase();
+    const results = await parseExcel(buffer, baseName);
     console.log(`[ERD] Parsed Excel "${file.name}": ${results.length} sheet(s)`, results);
     return results;
   }
