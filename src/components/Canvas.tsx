@@ -27,6 +27,8 @@ export default function Canvas({ state, dispatch, svgRef }: CanvasProps) {
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [panning, setPanning] = useState<{ startX: number; startY: number; panX: number; panY: number } | null>(null);
+  const [spaceHeld, setSpaceHeld] = useState(false);
+  const spaceHeldRef = useRef(false);
 
   const getSVGPoint = useCallback(
     (clientX: number, clientY: number) => {
@@ -40,6 +42,29 @@ export default function Canvas({ state, dispatch, svgRef }: CanvasProps) {
     },
     [zoom, pan]
   );
+
+  // Spacebar hold for pan mode
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.code === "Space" && !e.repeat && !(e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement)) {
+        e.preventDefault();
+        spaceHeldRef.current = true;
+        setSpaceHeld(true);
+      }
+    };
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code === "Space") {
+        spaceHeldRef.current = false;
+        setSpaceHeld(false);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+    };
+  }, []);
 
   // Wheel zoom (trackpad pinch + mouse wheel)
   useEffect(() => {
@@ -78,11 +103,16 @@ export default function Canvas({ state, dispatch, svgRef }: CanvasProps) {
     return () => container.removeEventListener("wheel", onWheel);
   }, []);
 
-  // Table drag
+  // Table drag (or pan if space held)
   const handleMouseDown = useCallback(
     (e: React.MouseEvent, tableId: string) => {
       e.preventDefault();
       e.stopPropagation();
+      if (spaceHeldRef.current) {
+        // Space held — start panning instead of dragging table
+        setPanning({ startX: e.clientX, startY: e.clientY, panX: pan.x, panY: pan.y });
+        return;
+      }
       const { x, y } = getSVGPoint(e.clientX, e.clientY);
       const table = tables[tableId];
       if (!table) return;
@@ -92,14 +122,13 @@ export default function Canvas({ state, dispatch, svgRef }: CanvasProps) {
       });
       dispatch({ type: "SET_HOVERED_TABLE", tableId });
     },
-    [tables, getSVGPoint, dispatch]
+    [tables, getSVGPoint, dispatch, pan]
   );
 
-  // Canvas pan (middle-click or right-click drag on empty space)
+  // Canvas pan (middle-click, right-click, or space+left-click)
   const handleCanvasMouseDown = useCallback(
     (e: React.MouseEvent) => {
-      // Middle click or right click to pan
-      if (e.button === 1 || e.button === 2) {
+      if (e.button === 1 || e.button === 2 || (e.button === 0 && spaceHeldRef.current)) {
         e.preventDefault();
         setPanning({ startX: e.clientX, startY: e.clientY, panX: pan.x, panY: pan.y });
       }
@@ -173,7 +202,7 @@ export default function Canvas({ state, dispatch, svgRef }: CanvasProps) {
         background: "#141416",
         overflow: "hidden",
         position: "relative",
-        cursor: panning ? "grabbing" : dragging ? "grabbing" : "default",
+        cursor: panning ? "grabbing" : dragging ? "grabbing" : spaceHeld ? "grab" : "default",
       }}
       onMouseDown={handleCanvasMouseDown}
       onContextMenu={(e) => e.preventDefault()}
