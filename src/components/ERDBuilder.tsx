@@ -7,9 +7,12 @@ import Header from "./Header";
 import Toolbar from "./Toolbar";
 import UploadPanel from "./UploadPanel";
 import Canvas from "./Canvas";
+import GridView from "./GridView";
 import Sidebar from "./Sidebar";
 import StatsFooter from "./StatsFooter";
 import AddTableModal from "./AddTableModal";
+
+export type ViewMode = "canvas" | "grid";
 
 interface ERDBuilderProps {
   erdId: string;
@@ -21,6 +24,7 @@ export default function ERDBuilder({ erdId, userName, userRole }: ERDBuilderProp
   const [state, dispatch] = useReducer(erdReducer, initialState);
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [showAddTable, setShowAddTable] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>("canvas");
 
   const { saveStatus, saveNow, erdName, updateName, loaded } =
     useERDPersistence(erdId, state, dispatch);
@@ -97,12 +101,18 @@ export default function ERDBuilder({ erdId, userName, userRole }: ERDBuilderProp
           onSave={saveNow}
           saveStatus={saveStatus}
           erdId={erdId}
+          viewMode={viewMode}
+          onToggleView={() => setViewMode((v) => (v === "canvas" ? "grid" : "canvas"))}
         />
       )}
 
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
         {hasTables ? (
-          <Canvas state={state} dispatch={dispatch} svgRef={svgRef} />
+          viewMode === "canvas" ? (
+            <Canvas state={state} dispatch={dispatch} svgRef={svgRef} />
+          ) : (
+            <GridView state={state} dispatch={dispatch} />
+          )
         ) : (
           <UploadPanel dispatch={dispatch} existingTableCount={0} />
         )}

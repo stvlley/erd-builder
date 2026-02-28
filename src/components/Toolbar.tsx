@@ -7,6 +7,7 @@ import { inferRelationships, markForeignKeys } from "@/lib/infer-relationships";
 import { COLORS } from "@/lib/constants";
 import { exportSVG } from "@/lib/export-svg";
 import type { SaveStatus } from "@/lib/erd-persistence";
+import type { ViewMode } from "./ERDBuilder";
 import Link from "next/link";
 
 interface ToolbarProps {
@@ -18,6 +19,8 @@ interface ToolbarProps {
   onSave: () => void;
   saveStatus: SaveStatus;
   erdId: string;
+  viewMode: ViewMode;
+  onToggleView: () => void;
 }
 
 export default function Toolbar({
@@ -29,6 +32,8 @@ export default function Toolbar({
   onSave,
   saveStatus,
   erdId,
+  viewMode,
+  onToggleView,
 }: ToolbarProps) {
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -170,6 +175,17 @@ export default function Toolbar({
         {saveStatus === "saving" ? "SAVING..." : "SAVE"}
       </button>
       <div style={{ flex: 1 }} />
+      <button
+        style={{
+          ...btnStyle,
+          background: viewMode === "grid" ? COLORS.accent + "20" : "transparent",
+          borderColor: viewMode === "grid" ? COLORS.accent : COLORS.borderDim,
+          color: viewMode === "grid" ? COLORS.accent : COLORS.textDim,
+        }}
+        onClick={onToggleView}
+      >
+        {viewMode === "canvas" ? "GRID VIEW" : "CANVAS VIEW"}
+      </button>
       <button
         style={{ ...btnStyle, color: "#ef4444", borderColor: "#ef444444" }}
         onClick={() => {
