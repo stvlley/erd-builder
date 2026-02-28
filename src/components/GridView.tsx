@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { ERDState, ERDAction } from "@/types/erd";
 import { COLORS } from "@/lib/constants";
 
@@ -11,10 +11,38 @@ interface GridViewProps {
 
 export default function GridView({ state, dispatch }: GridViewProps) {
   const { tables, relationships } = state;
-  const [hoveredCol, setHoveredCol] = useState<{ tableId: string; columnId: string } | null>(null);
+  const [selectedTableId, setSelectedTableId] = useState<string | null>(null);
+  const [hoveredCol, setHoveredCol] = useState<{
+    tableId: string;
+    columnId: string;
+  } | null>(null);
   const [search, setSearch] = useState("");
 
   const tableList = useMemo(() => Object.values(tables), [tables]);
+
+  // Auto-select first table on mount or when tables change
+  useEffect(() => {
+    if (
+      tableList.length > 0 &&
+      (!selectedTableId || !tables[selectedTableId])
+    ) {
+      setSelectedTableId(tableList[0].id);
+    }
+  }, [tableList, selectedTableId, tables]);
+
+  const selectedTable = selectedTableId ? tables[selectedTableId] : null;
+
+  // Relationship count per table
+  const relCountByTable = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const rel of relationships) {
+      counts.set(rel.fromTableId, (counts.get(rel.fromTableId) || 0) + 1);
+      if (rel.toTableId !== rel.fromTableId) {
+        counts.set(rel.toTableId, (counts.get(rel.toTableId) || 0) + 1);
+      }
+    }
+    return counts;
+  }, [relationships]);
 
   // Build a map: columnKey -> set of related columnKeys via relationships
   const relatedMap = useMemo(() => {
@@ -29,6 +57,36 @@ export default function GridView({ state, dispatch }: GridViewProps) {
     }
     return map;
   }, [relationships]);
+
+  // For the selected table, build a map of columnId -> relationship targets
+  const columnRelTargets = useMemo(() => {
+    if (!selectedTableId) return new Map<string, string[]>();
+    const map = new Map<string, string[]>();
+
+    for (const rel of relationships) {
+      if (rel.fromTableId === selectedTableId) {
+        const targets = map.get(rel.fromColumnId) || [];
+        const toTable = tables[rel.toTableId];
+        const toCol = toTable?.columns.find((c) => c.id === rel.toColumnId);
+        if (toTable && toCol) {
+          targets.push(`→ ${toTable.name}.${toCol.name}`);
+        }
+        map.set(rel.fromColumnId, targets);
+      }
+      if (rel.toTableId === selectedTableId) {
+        const targets = map.get(rel.toColumnId) || [];
+        const fromTable = tables[rel.fromTableId];
+        const fromCol = fromTable?.columns.find(
+          (c) => c.id === rel.fromColumnId
+        );
+        if (fromTable && fromCol) {
+          targets.push(`← ${fromTable.name}.${fromCol.name}`);
+        }
+        map.set(rel.toColumnId, targets);
+      }
+    }
+    return map;
+  }, [selectedTableId, relationships, tables]);
 
   // Get all highlighted column keys when hovering
   const highlightedCols = useMemo(() => {
@@ -53,7 +111,9 @@ export default function GridView({ state, dispatch }: GridViewProps) {
 
   const isHoveredCol = useCallback(
     (tableId: string, columnId: string) => {
-      return hoveredCol?.tableId === tableId && hoveredCol?.columnId === columnId;
+      return (
+        hoveredCol?.tableId === tableId && hoveredCol?.columnId === columnId
+      );
     },
     [hoveredCol]
   );
@@ -62,19 +122,16 @@ export default function GridView({ state, dispatch }: GridViewProps) {
   const query = search.trim().toLowerCase();
   const hasSearch = query.length > 0;
 
-  const isNameMatch = useCallback(
-    (name: string) => {
-      if (!hasSearch) return false;
-      return name.toLowerCase().includes(query);
-    },
-    [hasSearch, query]
-  );
-
   const isColSearchMatch = useCallback(
-    (col: { name: string; description?: string; metadata?: Record<string, string> }) => {
+    (col: {
+      name: string;
+      description?: string;
+      metadata?: Record<string, string>;
+    }) => {
       if (!hasSearch) return false;
       if (col.name.toLowerCase().includes(query)) return true;
-      if (col.description && col.description.toLowerCase().includes(query)) return true;
+      if (col.description && col.description.toLowerCase().includes(query))
+        return true;
       if (col.metadata) {
         for (const val of Object.values(col.metadata)) {
           if (val.toLowerCase().includes(query)) return true;
@@ -85,7 +142,7 @@ export default function GridView({ state, dispatch }: GridViewProps) {
     [hasSearch, query]
   );
 
-  // Count search matches per table (for dimming tables with no matches)
+  // Count search matches per table
   const tableMatchCount = useMemo(() => {
     if (!hasSearch) return null;
     const counts = new Map<string, number>();
@@ -112,7 +169,7 @@ export default function GridView({ state, dispatch }: GridViewProps) {
     <div
       style={{
         flex: 1,
-        overflow: "auto",
+        overflow: "hidden",
         background: COLORS.canvas,
         display: "flex",
         flexDirection: "column",
@@ -121,7 +178,7 @@ export default function GridView({ state, dispatch }: GridViewProps) {
       {/* Search bar */}
       <div
         style={{
-          padding: "12px 24px",
+          padding: "8px 16px",
           borderBottom: `1px solid ${COLORS.borderDim}`,
           background: COLORS.bg,
           display: "flex",
@@ -136,13 +193,13 @@ export default function GridView({ state, dispatch }: GridViewProps) {
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search columns, descriptions, metadata..."
           style={{
-            padding: "6px 12px",
+            padding: "5px 10px",
             background: COLORS.canvas,
             border: `1px solid ${COLORS.borderDim}`,
             color: COLORS.text,
             fontSize: 11,
             fontFamily: "var(--font-mono), monospace",
-            width: 280,
+            flex: 1,
             outline: "none",
           }}
           onFocus={(e) => {
@@ -161,6 +218,7 @@ export default function GridView({ state, dispatch }: GridViewProps) {
                 color: totalMatches > 0 ? COLORS.accent : COLORS.textMuted,
                 letterSpacing: "0.1em",
                 textTransform: "uppercase",
+                flexShrink: 0,
               }}
             >
               {totalMatches} match{totalMatches !== 1 ? "es" : ""}
@@ -168,7 +226,7 @@ export default function GridView({ state, dispatch }: GridViewProps) {
             <button
               onClick={() => setSearch("")}
               style={{
-                padding: "4px 10px",
+                padding: "3px 8px",
                 background: "transparent",
                 border: `1px solid ${COLORS.borderDim}`,
                 color: COLORS.textMuted,
@@ -177,6 +235,7 @@ export default function GridView({ state, dispatch }: GridViewProps) {
                 fontFamily: "var(--font-mono), monospace",
                 letterSpacing: "0.1em",
                 cursor: "pointer",
+                flexShrink: 0,
               }}
             >
               CLEAR
@@ -185,148 +244,290 @@ export default function GridView({ state, dispatch }: GridViewProps) {
         )}
       </div>
 
-      {/* Grid */}
-      <div style={{ flex: 1, overflow: "auto", padding: 24 }}>
+      {/* Split panel */}
+      <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+        {/* Left panel — table list */}
         <div
           style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-            gap: 16,
-            alignItems: "start",
+            width: 220,
+            flexShrink: 0,
+            borderRight: `1px solid ${COLORS.borderDim}`,
+            background: COLORS.bg,
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
           }}
         >
-          {tableList.map((table) => {
-            const tableHasMatches = tableMatchCount ? (tableMatchCount.get(table.id) || 0) > 0 : true;
-            const tableNameMatch = hasSearch && isNameMatch(table.name);
+          {/* Panel header */}
+          <div
+            style={{
+              padding: "10px 14px",
+              borderBottom: `1px solid ${COLORS.borderDim}`,
+              flexShrink: 0,
+            }}
+          >
+            <span
+              style={{
+                fontFamily: "var(--font-mono), monospace",
+                fontSize: 9,
+                fontWeight: 700,
+                letterSpacing: "0.15em",
+                color: COLORS.textMuted,
+                textTransform: "uppercase",
+              }}
+            >
+              TABLES ({tableList.length})
+            </span>
+          </div>
 
-            return (
-              <div
-                key={table.id}
-                style={{
-                  background: COLORS.bg,
-                  border: `1px solid ${tableNameMatch ? COLORS.accent + "66" : COLORS.borderDim}`,
-                  overflow: "hidden",
-                  opacity: hasSearch && !tableHasMatches ? 0.3 : 1,
-                  transition: "opacity 0.15s",
-                }}
-              >
-                {/* Table header */}
+          {/* Scrollable table list */}
+          <div style={{ flex: 1, overflowY: "auto", overflowX: "hidden" }}>
+            {tableList.map((table) => {
+              const isSelected = table.id === selectedTableId;
+              const matchCount = tableMatchCount?.get(table.id) ?? 0;
+              const hasMtch = !hasSearch || matchCount > 0;
+              const relCount = relCountByTable.get(table.id) || 0;
+
+              return (
                 <div
+                  key={table.id}
+                  onClick={() => setSelectedTableId(table.id)}
                   style={{
-                    padding: "10px 14px",
-                    borderBottom: `1px solid ${COLORS.borderDim}`,
-                    borderLeft: `3px solid ${table.color}`,
-                    background: tableNameMatch
-                      ? COLORS.accent + "12"
-                      : table.color + "10",
+                    padding: "8px 12px",
+                    cursor: "pointer",
+                    borderLeft: isSelected
+                      ? `3px solid ${table.color}`
+                      : "3px solid transparent",
+                    background: isSelected ? table.color + "12" : "transparent",
+                    opacity: hasSearch && !hasMtch ? 0.3 : 1,
+                    transition: "opacity 0.15s, background 0.1s",
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: 8,
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isSelected) {
+                      e.currentTarget.style.background = "#ffffff06";
+                    }
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isSelected) {
+                      e.currentTarget.style.background = "transparent";
+                    }
                   }}
                 >
-                  <div
+                  {/* Color dot */}
+                  <span
                     style={{
-                      fontFamily: "var(--font-mono), monospace",
-                      fontSize: 12,
-                      fontWeight: 700,
-                      letterSpacing: "0.08em",
-                      color: tableNameMatch ? COLORS.accent : table.color,
+                      width: 8,
+                      height: 8,
+                      background: table.color,
+                      flexShrink: 0,
+                      marginTop: 3,
                     }}
-                  >
-                    {table.name}
-                  </div>
-                  <div
-                    style={{
-                      fontFamily: "var(--font-mono), monospace",
-                      fontSize: 8,
-                      letterSpacing: "0.15em",
-                      color: table.color + "88",
-                      marginTop: 2,
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    {table.columns.length} columns
+                  />
+                  <div style={{ minWidth: 0 }}>
+                    <div
+                      style={{
+                        fontFamily: "var(--font-mono), monospace",
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color: isSelected ? table.color : COLORS.text,
+                        letterSpacing: "0.05em",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {table.name}
+                    </div>
+                    <div
+                      style={{
+                        fontFamily: "var(--font-mono), monospace",
+                        fontSize: 8,
+                        color: COLORS.textMuted,
+                        letterSpacing: "0.1em",
+                        marginTop: 1,
+                      }}
+                    >
+                      {table.columns.length} cols &middot; {relCount} rel
+                      {relCount !== 1 ? "s" : ""}
+                    </div>
                   </div>
                 </div>
+              );
+            })}
+          </div>
+        </div>
 
-                {/* Column rows */}
+        {/* Right panel — column detail */}
+        <div
+          style={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+            background: COLORS.canvas,
+          }}
+        >
+          {selectedTable ? (
+            <>
+              {/* Table header */}
+              <div
+                style={{
+                  padding: "12px 20px",
+                  borderBottom: `1px solid ${COLORS.borderDim}`,
+                  background: COLORS.bg,
+                  flexShrink: 0,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                }}
+              >
+                <span
+                  style={{
+                    width: 10,
+                    height: 10,
+                    background: selectedTable.color,
+                    flexShrink: 0,
+                  }}
+                />
                 <div>
-                  {table.columns
-                    .filter((col) => !col.collapsed)
-                    .map((col, idx) => {
-                      const highlighted = isHighlighted(table.id, col.id);
-                      const isSource = isHoveredCol(table.id, col.id);
-                      const hasRelationship = relatedMap.has(`${table.id}:${col.id}`);
-                      const searchMatch = hasSearch && isColSearchMatch(col);
+                  <div
+                    style={{
+                      fontFamily: "var(--font-mono), monospace",
+                      fontSize: 14,
+                      fontWeight: 700,
+                      color: selectedTable.color,
+                      letterSpacing: "0.06em",
+                    }}
+                  >
+                    {selectedTable.name}
+                  </div>
+                  <div
+                    style={{
+                      fontFamily: "var(--font-mono), monospace",
+                      fontSize: 9,
+                      color: COLORS.textMuted,
+                      letterSpacing: "0.12em",
+                      marginTop: 1,
+                    }}
+                  >
+                    {selectedTable.columns.length} columns &middot;{" "}
+                    {relCountByTable.get(selectedTableId!) || 0} relationships
+                  </div>
+                </div>
+              </div>
 
-                      return (
-                        <div
-                          key={col.id}
-                          onMouseEnter={() =>
-                            setHoveredCol({ tableId: table.id, columnId: col.id })
-                          }
-                          onMouseLeave={() => setHoveredCol(null)}
-                          onClick={() => {
-                            dispatch({
-                              type: "SELECT_TABLE",
-                              tableId: table.id,
-                            });
-                            dispatch({
-                              type: "SET_SIDEBAR",
-                              sidebar: { type: "edit-table", tableId: table.id },
-                            });
-                          }}
-                          style={{
-                            display: "flex",
-                            alignItems: "center",
-                            gap: 8,
-                            padding: "4px 14px",
-                            fontSize: 11,
-                            fontFamily: "var(--font-mono), monospace",
-                            cursor: hasRelationship ? "pointer" : "default",
-                            background: isSource
-                              ? COLORS.accent + "20"
-                              : highlighted
-                              ? COLORS.accent + "10"
-                              : searchMatch
-                              ? COLORS.accent + "14"
-                              : idx % 2 === 0
-                              ? "transparent"
-                              : "#ffffff02",
-                            borderLeft: highlighted
-                              ? `3px solid ${COLORS.accent}`
-                              : searchMatch
-                              ? `3px solid ${COLORS.accent}88`
-                              : "3px solid transparent",
-                            transition: "background 0.1s, border-color 0.1s",
-                          }}
-                        >
-                          {/* Badges */}
-                          <span
+              {/* Column table */}
+              <div style={{ flex: 1, overflow: "auto" }}>
+                <table
+                  style={{
+                    width: "100%",
+                    borderCollapse: "collapse",
+                    fontFamily: "var(--font-mono), monospace",
+                  }}
+                >
+                  <thead>
+                    <tr
+                      style={{
+                        position: "sticky",
+                        top: 0,
+                        background: "#1a1a1c",
+                        borderBottom: `2px solid ${COLORS.borderDim}`,
+                        zIndex: 1,
+                      }}
+                    >
+                      {["COLUMN", "TYPE", "PK", "FK", "DESCRIPTION", "RELATED TO"].map(
+                        (header) => (
+                          <th
+                            key={header}
                             style={{
-                              width: 20,
-                              flexShrink: 0,
-                              fontSize: 7,
+                              padding: "7px 12px",
+                              fontSize: 9,
                               fontWeight: 700,
-                              letterSpacing: "0.05em",
-                              color: col.isPrimaryKey
-                                ? "#facc15"
-                                : col.isForeignKey
-                                ? "#818CF8"
-                                : "transparent",
+                              letterSpacing: "0.15em",
+                              color: COLORS.textMuted,
+                              textTransform: "uppercase",
+                              textAlign: "left",
+                              whiteSpace: "nowrap",
                             }}
                           >
-                            {col.isPrimaryKey ? "PK" : col.isForeignKey ? "FK" : ""}
-                          </span>
+                            {header}
+                          </th>
+                        )
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedTable.columns
+                      .filter((col) => !col.collapsed)
+                      .map((col, idx) => {
+                        const highlighted = isHighlighted(
+                          selectedTable.id,
+                          col.id
+                        );
+                        const isSource = isHoveredCol(
+                          selectedTable.id,
+                          col.id
+                        );
+                        const searchMatch =
+                          hasSearch && isColSearchMatch(col);
+                        const relTargets =
+                          columnRelTargets.get(col.id) || [];
 
-                          {/* Column name + description */}
-                          <span
+                        return (
+                          <tr
+                            key={col.id}
+                            onMouseEnter={() =>
+                              setHoveredCol({
+                                tableId: selectedTable.id,
+                                columnId: col.id,
+                              })
+                            }
+                            onMouseLeave={() => setHoveredCol(null)}
+                            onClick={() => {
+                              dispatch({
+                                type: "SELECT_TABLE",
+                                tableId: selectedTable.id,
+                              });
+                              dispatch({
+                                type: "SET_SIDEBAR",
+                                sidebar: {
+                                  type: "edit-table",
+                                  tableId: selectedTable.id,
+                                },
+                              });
+                            }}
                             style={{
-                              flex: 1,
-                              display: "flex",
-                              flexDirection: "column",
-                              gap: 1,
+                              cursor: "pointer",
+                              background: isSource
+                                ? COLORS.accent + "20"
+                                : highlighted
+                                ? COLORS.accent + "10"
+                                : searchMatch
+                                ? COLORS.accent + "14"
+                                : idx % 2 === 0
+                                ? COLORS.surface
+                                : "transparent",
+                              borderLeft: highlighted
+                                ? `3px solid ${COLORS.accent}`
+                                : searchMatch
+                                ? `3px solid ${COLORS.accent}88`
+                                : "3px solid transparent",
+                              transition:
+                                "background 0.1s, border-color 0.1s",
                             }}
                           >
-                            <span
+                            {/* Column name */}
+                            <td
                               style={{
+                                padding: "5px 12px",
+                                fontSize: 11,
+                                fontWeight:
+                                  col.isPrimaryKey || highlighted
+                                    ? 700
+                                    : 400,
                                 color: highlighted
                                   ? COLORS.accent
                                   : searchMatch
@@ -334,61 +535,134 @@ export default function GridView({ state, dispatch }: GridViewProps) {
                                   : col.isPrimaryKey
                                   ? COLORS.text
                                   : COLORS.textDim,
-                                fontWeight:
-                                  col.isPrimaryKey || highlighted || searchMatch
-                                    ? 700
-                                    : 400,
                               }}
                             >
                               {col.name}
-                            </span>
-                            {col.description && (
-                              <span
-                                style={{
-                                  fontSize: 8,
-                                  color: searchMatch && col.description.toLowerCase().includes(query)
-                                    ? COLORS.accent + "cc"
-                                    : COLORS.textMuted,
-                                  lineHeight: 1.2,
-                                }}
-                              >
-                                {col.description}
-                              </span>
-                            )}
-                          </span>
+                            </td>
 
-                          {/* Type */}
-                          <span
-                            style={{
-                              fontSize: 8,
-                              color: COLORS.textMuted,
-                              flexShrink: 0,
-                            }}
-                          >
-                            {col.type}
-                          </span>
-
-                          {/* Relationship indicator */}
-                          {hasRelationship && (
-                            <span
+                            {/* Type */}
+                            <td
                               style={{
-                                width: 4,
-                                height: 4,
-                                borderRadius: "50%",
-                                background: highlighted
-                                  ? COLORS.accent
-                                  : COLORS.textMuted,
-                                flexShrink: 0,
+                                padding: "5px 12px",
+                                fontSize: 10,
+                                color: COLORS.textMuted,
                               }}
-                            />
-                          )}
-                        </div>
-                      );
-                    })}
-                </div>
+                            >
+                              {col.type}
+                            </td>
+
+                            {/* PK badge */}
+                            <td style={{ padding: "5px 12px" }}>
+                              {col.isPrimaryKey && (
+                                <span
+                                  style={{
+                                    fontSize: 8,
+                                    fontWeight: 700,
+                                    letterSpacing: "0.05em",
+                                    color: "#facc15",
+                                  }}
+                                >
+                                  PK
+                                </span>
+                              )}
+                            </td>
+
+                            {/* FK badge */}
+                            <td style={{ padding: "5px 12px" }}>
+                              {col.isForeignKey && (
+                                <span
+                                  style={{
+                                    fontSize: 8,
+                                    fontWeight: 700,
+                                    letterSpacing: "0.05em",
+                                    color: "#818CF8",
+                                  }}
+                                >
+                                  FK
+                                </span>
+                              )}
+                            </td>
+
+                            {/* Description */}
+                            <td
+                              style={{
+                                padding: "5px 12px",
+                                fontSize: 10,
+                                color:
+                                  searchMatch &&
+                                  col.description
+                                    ?.toLowerCase()
+                                    .includes(query)
+                                    ? COLORS.accent + "cc"
+                                    : COLORS.textDim,
+                                maxWidth: 240,
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              {col.description || ""}
+                            </td>
+
+                            {/* Related To */}
+                            <td
+                              style={{
+                                padding: "5px 12px",
+                                fontSize: 10,
+                              }}
+                            >
+                              {relTargets.length > 0 && (
+                                <div
+                                  style={{
+                                    display: "flex",
+                                    flexDirection: "column",
+                                    gap: 1,
+                                  }}
+                                >
+                                  {relTargets.map((target, i) => (
+                                    <span
+                                      key={i}
+                                      style={{
+                                        color: COLORS.accent,
+                                        fontWeight: highlighted ? 700 : 400,
+                                        whiteSpace: "nowrap",
+                                      }}
+                                    >
+                                      {target}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                  </tbody>
+                </table>
               </div>
-            );
-          })}
+            </>
+          ) : (
+            /* Empty state */
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
+            >
+              <span
+                style={{
+                  fontFamily: "var(--font-mono), monospace",
+                  fontSize: 11,
+                  color: COLORS.textMuted,
+                  letterSpacing: "0.1em",
+                }}
+              >
+                Select a table
+              </span>
+            </div>
+          )}
         </div>
       </div>
     </div>
