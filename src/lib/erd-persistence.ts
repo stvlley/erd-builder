@@ -62,28 +62,32 @@ export function useERDPersistence(
     };
   }, [erdId, dispatch]);
 
-  // Auto-save on state changes (debounced)
+  // Keep a ref to current state so the debounced callback always has the latest
+  const stateRef = useRef(state);
+  useEffect(() => { stateRef.current = state; });
+
+  // Auto-save on state changes (debounced) — serialization only happens inside the callback
   useEffect(() => {
     if (!loaded) return;
-
-    const serializable: SerializableERDState = {
-      tables: state.tables,
-      relationships: state.relationships,
-      customFieldDefinitions: state.customFieldDefinitions,
-    };
-
-    const snapshot = JSON.stringify(serializable);
-    if (snapshot === lastSavedRef.current) return;
 
     if (timerRef.current) clearTimeout(timerRef.current);
 
     timerRef.current = setTimeout(async () => {
+      const current = stateRef.current;
+      const serializable: SerializableERDState = {
+        tables: current.tables,
+        relationships: current.relationships,
+        customFieldDefinitions: current.customFieldDefinitions,
+      };
+      const snapshot = JSON.stringify(serializable);
+      if (snapshot === lastSavedRef.current) return;
+
       setSaveStatus("saving");
       try {
         const res = await fetch(`/api/erds/${erdId}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ data: serializable }),
+          body: snapshot,
         });
         if (res.ok) {
           lastSavedRef.current = snapshot;

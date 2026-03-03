@@ -1,3 +1,4 @@
+import { memo } from "react";
 import { Column } from "@/types/erd";
 import { TABLE_W, ROW_H, COLORS } from "@/lib/constants";
 
@@ -14,7 +15,7 @@ interface FieldRowProps {
   onToggleCollapse: () => void;
 }
 
-export default function FieldRow({
+export default memo(function FieldRow({
   column,
   tableX,
   fieldY,
@@ -137,4 +138,4 @@ export default function FieldRow({
       </g>
     </g>
   );
-}
+});

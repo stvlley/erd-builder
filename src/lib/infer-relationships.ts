@@ -29,178 +29,111 @@ function singularize(word: string): string {
   return word;
 }
 
+function makePairKey(tA: string, cA: string, tB: string, cB: string): string {
+  // Canonical key so both directions produce the same key
+  if (tA < tB || (tA === tB && cA < cB)) {
+    return `${tA}|${cA}|${tB}|${cB}`;
+  }
+  return `${tB}|${cB}|${tA}|${cA}`;
+}
+
 export function inferRelationships(tables: Record<string, Table>): Relationship[] {
-  const candidates: Candidate[] = [];
+  const pairMap = new Map<string, Candidate>();
   const tableList = Object.values(tables);
 
+  // Pre-index: build suffix -> [{table, column}] map for Strategy 3
+  const suffixIndex = new Map<string, { table: Table; colId: string; colName: string; isPK: boolean }[]>();
+  for (const table of tableList) {
+    for (const col of table.columns) {
+      const suffix = getColumnSuffix(col.name);
+      if (suffix.length < 2) continue;
+      let arr = suffixIndex.get(suffix);
+      if (!arr) { arr = []; suffixIndex.set(suffix, arr); }
+      arr.push({ table, colId: col.id, colName: col.name, isPK: col.isPrimaryKey });
+    }
+  }
+
+  function addCandidate(c: Candidate) {
+    const key = makePairKey(c.fromTableId, c.fromColumnId, c.toTableId, c.toColumnId);
+    const existing = pairMap.get(key);
+    if (!existing || c.confidence > existing.confidence) {
+      pairMap.set(key, c);
+    }
+  }
+
+  // Strategies 1, 2, 4: require table-pair iteration
   for (let i = 0; i < tableList.length; i++) {
     for (let j = i + 1; j < tableList.length; j++) {
       const tA = tableList[i];
       const tB = tableList[j];
+      const tANameLower = tA.name.toLowerCase();
+      const tBNameLower = tB.name.toLowerCase();
 
       for (const colA of tA.columns) {
-        for (const colB of tB.columns) {
-          // Strategy 1: _id suffix match (0.95)
-          // e.g., "user_id" in orders → "id" in users
-          if (colA.name.toLowerCase().endsWith("_id") && !colA.isPrimaryKey) {
-            const ref = colA.name.slice(0, -3).toLowerCase();
-            const targetName = tB.name.toLowerCase();
-            if (
-              (targetName === ref ||
-                targetName === pluralize(ref) ||
-                singularize(targetName) === ref) &&
-              colB.isPrimaryKey
-            ) {
-              candidates.push({
-                fromTableId: tB.id,
-                fromColumnId: colB.id,
-                toTableId: tA.id,
-                toColumnId: colA.id,
-                confidence: 0.95,
-              });
+        const colANameLower = colA.name.toLowerCase();
+
+        // Strategy 1: _id suffix (colA references tB)
+        if (colANameLower.endsWith("_id") && !colA.isPrimaryKey) {
+          const ref = colANameLower.slice(0, -3);
+          if (tBNameLower === ref || tBNameLower === pluralize(ref) || singularize(tBNameLower) === ref) {
+            for (const colB of tB.columns) {
+              if (colB.isPrimaryKey) {
+                addCandidate({ fromTableId: tB.id, fromColumnId: colB.id, toTableId: tA.id, toColumnId: colA.id, confidence: 0.95 });
+                break;
+              }
             }
           }
-          // Reverse direction
+        }
+
+        // Strategy 4: CamelCase Id (colA references tB)
+        const camelMatchA = colA.name.match(/^(.+)Id$/);
+        if (camelMatchA && !colA.isPrimaryKey) {
+          const ref = camelMatchA[1].toLowerCase();
+          if (tBNameLower === ref || tBNameLower === pluralize(ref) || singularize(tBNameLower) === ref) {
+            for (const colB of tB.columns) {
+              if (colB.isPrimaryKey) {
+                addCandidate({ fromTableId: tB.id, fromColumnId: colB.id, toTableId: tA.id, toColumnId: colA.id, confidence: 0.6 });
+                break;
+              }
+            }
+          }
+        }
+
+        for (const colB of tB.columns) {
+          // Strategy 1: _id suffix (colB references tA)
           if (colB.name.toLowerCase().endsWith("_id") && !colB.isPrimaryKey) {
             const ref = colB.name.slice(0, -3).toLowerCase();
-            const targetName = tA.name.toLowerCase();
-            if (
-              (targetName === ref ||
-                targetName === pluralize(ref) ||
-                singularize(targetName) === ref) &&
-              colA.isPrimaryKey
-            ) {
-              candidates.push({
-                fromTableId: tA.id,
-                fromColumnId: colA.id,
-                toTableId: tB.id,
-                toColumnId: colB.id,
-                confidence: 0.95,
-              });
-            }
-          }
-
-          // Strategy 2: Exact column name match (0.85)
-          // Same column name across different tables
-          if (colA.name === colB.name) {
-            if (colA.isPrimaryKey && !colB.isPrimaryKey) {
-              candidates.push({
-                fromTableId: tA.id,
-                fromColumnId: colA.id,
-                toTableId: tB.id,
-                toColumnId: colB.id,
-                confidence: 0.85,
-              });
-            } else if (colB.isPrimaryKey && !colA.isPrimaryKey) {
-              candidates.push({
-                fromTableId: tB.id,
-                fromColumnId: colB.id,
-                toTableId: tA.id,
-                toColumnId: colA.id,
-                confidence: 0.85,
-              });
-            } else if (!colA.isPrimaryKey && !colB.isPrimaryKey) {
-              // Neither is PK — still link them (lower confidence)
-              candidates.push({
-                fromTableId: tA.id,
-                fromColumnId: colA.id,
-                toTableId: tB.id,
-                toColumnId: colB.id,
-                confidence: 0.8,
-              });
-            }
-          }
-
-          // Strategy 3: Suffix match after stripping prefix (0.7)
-          // AS/400 style: O0BCTN and O1BCTN share suffix BCTN
-          // Also works for any columns where stripped suffix matches
-          const suffA = getColumnSuffix(colA.name);
-          const suffB = getColumnSuffix(colB.name);
-          if (
-            suffA === suffB &&
-            suffA.length >= 2 &&
-            colA.name !== colB.name // Different full names (exact match handled above)
-          ) {
-            const alreadyMatched = candidates.some(
-              (c) =>
-                (c.fromTableId === tA.id &&
-                  c.fromColumnId === colA.id &&
-                  c.toTableId === tB.id &&
-                  c.toColumnId === colB.id) ||
-                (c.fromTableId === tB.id &&
-                  c.fromColumnId === colB.id &&
-                  c.toTableId === tA.id &&
-                  c.toColumnId === colA.id)
-            );
-            if (!alreadyMatched) {
-              // PK side is "from" if available, otherwise first table is from
-              if (colA.isPrimaryKey && !colB.isPrimaryKey) {
-                candidates.push({
-                  fromTableId: tA.id,
-                  fromColumnId: colA.id,
-                  toTableId: tB.id,
-                  toColumnId: colB.id,
-                  confidence: 0.7,
-                });
-              } else if (colB.isPrimaryKey && !colA.isPrimaryKey) {
-                candidates.push({
-                  fromTableId: tB.id,
-                  fromColumnId: colB.id,
-                  toTableId: tA.id,
-                  toColumnId: colA.id,
-                  confidence: 0.7,
-                });
-              } else {
-                // Neither or both are PK — still link
-                candidates.push({
-                  fromTableId: tA.id,
-                  fromColumnId: colA.id,
-                  toTableId: tB.id,
-                  toColumnId: colB.id,
-                  confidence: 0.7,
-                });
+            if (tANameLower === ref || tANameLower === pluralize(ref) || singularize(tANameLower) === ref) {
+              if (colA.isPrimaryKey) {
+                addCandidate({ fromTableId: tA.id, fromColumnId: colA.id, toTableId: tB.id, toColumnId: colB.id, confidence: 0.95 });
               }
             }
           }
 
-          // Strategy 4: CamelCase Id match (0.6)
-          // e.g., "orderId" → "order" table PK
-          const camelMatchA = colA.name.match(/^(.+)Id$/);
-          if (camelMatchA && !colA.isPrimaryKey) {
-            const ref = camelMatchA[1].toLowerCase();
-            const targetName = tB.name.toLowerCase();
-            if (
-              (targetName === ref ||
-                targetName === pluralize(ref) ||
-                singularize(targetName) === ref) &&
-              colB.isPrimaryKey
-            ) {
-              candidates.push({
-                fromTableId: tB.id,
-                fromColumnId: colB.id,
-                toTableId: tA.id,
-                toColumnId: colA.id,
-                confidence: 0.6,
-              });
+          // Strategy 2: Exact column name match
+          if (colA.name === colB.name) {
+            if (colA.isPrimaryKey && !colB.isPrimaryKey) {
+              addCandidate({ fromTableId: tA.id, fromColumnId: colA.id, toTableId: tB.id, toColumnId: colB.id, confidence: 0.85 });
+            } else if (colB.isPrimaryKey && !colA.isPrimaryKey) {
+              addCandidate({ fromTableId: tB.id, fromColumnId: colB.id, toTableId: tA.id, toColumnId: colA.id, confidence: 0.85 });
+            } else if (!colA.isPrimaryKey && !colB.isPrimaryKey) {
+              addCandidate({ fromTableId: tA.id, fromColumnId: colA.id, toTableId: tB.id, toColumnId: colB.id, confidence: 0.8 });
             }
           }
-          const camelMatchB = colB.name.match(/^(.+)Id$/);
-          if (camelMatchB && !colB.isPrimaryKey) {
-            const ref = camelMatchB[1].toLowerCase();
-            const targetName = tA.name.toLowerCase();
-            if (
-              (targetName === ref ||
-                targetName === pluralize(ref) ||
-                singularize(targetName) === ref) &&
-              colA.isPrimaryKey
-            ) {
-              candidates.push({
-                fromTableId: tA.id,
-                fromColumnId: colA.id,
-                toTableId: tB.id,
-                toColumnId: colB.id,
-                confidence: 0.6,
-              });
+        }
+      }
+
+      // Strategy 4: CamelCase Id (colB references tA)
+      for (const colB of tB.columns) {
+        const camelMatchB = colB.name.match(/^(.+)Id$/);
+        if (camelMatchB && !colB.isPrimaryKey) {
+          const ref = camelMatchB[1].toLowerCase();
+          if (tANameLower === ref || tANameLower === pluralize(ref) || singularize(tANameLower) === ref) {
+            for (const colA of tA.columns) {
+              if (colA.isPrimaryKey) {
+                addCandidate({ fromTableId: tA.id, fromColumnId: colA.id, toTableId: tB.id, toColumnId: colB.id, confidence: 0.6 });
+                break;
+              }
             }
           }
         }
@@ -208,15 +141,26 @@ export function inferRelationships(tables: Record<string, Table>): Relationship[
     }
   }
 
-  // Deduplicate: keep highest confidence per unique column pair
-  const pairMap = new Map<string, Candidate>();
-  for (const c of candidates) {
-    const key = [c.fromTableId, c.fromColumnId, c.toTableId, c.toColumnId]
-      .sort()
-      .join("|");
-    const existing = pairMap.get(key);
-    if (!existing || c.confidence > existing.confidence) {
-      pairMap.set(key, c);
+  // Strategy 3: Suffix match via pre-built index
+  // O(S * m^2) where S = unique suffixes, m = matches per suffix
+  // Much faster than the previous O(T^2 * C^2) nested loop with O(n) dedup inside
+  for (const [, entries] of suffixIndex) {
+    if (entries.length < 2) continue;
+    for (let a = 0; a < entries.length; a++) {
+      for (let b = a + 1; b < entries.length; b++) {
+        const eA = entries[a];
+        const eB = entries[b];
+        if (eA.table.id === eB.table.id) continue;
+        if (eA.colName === eB.colName) continue; // exact match handled by Strategy 2
+
+        if (eA.isPK && !eB.isPK) {
+          addCandidate({ fromTableId: eA.table.id, fromColumnId: eA.colId, toTableId: eB.table.id, toColumnId: eB.colId, confidence: 0.7 });
+        } else if (eB.isPK && !eA.isPK) {
+          addCandidate({ fromTableId: eB.table.id, fromColumnId: eB.colId, toTableId: eA.table.id, toColumnId: eA.colId, confidence: 0.7 });
+        } else {
+          addCandidate({ fromTableId: eA.table.id, fromColumnId: eA.colId, toTableId: eB.table.id, toColumnId: eB.colId, confidence: 0.7 });
+        }
+      }
     }
   }
 
@@ -243,13 +187,17 @@ export function markForeignKeys(
 
   const updated: Record<string, Table> = {};
   for (const [id, table] of Object.entries(tables)) {
-    updated[id] = {
-      ...table,
-      columns: table.columns.map((col) => ({
-        ...col,
-        isForeignKey: col.isForeignKey || fkSet.has(`${id}:${col.id}`),
-      })),
-    };
+    let changed = false;
+    const newCols = table.columns.map((col) => {
+      const shouldBeFK = col.isForeignKey || fkSet.has(`${id}:${col.id}`);
+      if (shouldBeFK !== col.isForeignKey) {
+        changed = true;
+        return { ...col, isForeignKey: shouldBeFK };
+      }
+      return col;
+    });
+    // Preserve table reference if nothing changed to avoid unnecessary re-renders
+    updated[id] = changed ? { ...table, columns: newCols } : table;
   }
   return updated;
 }

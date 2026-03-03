@@ -1,4 +1,5 @@
-import { Table, Relationship, ERDAction, ERDState } from "@/types/erd";
+import { memo, useCallback, useMemo } from "react";
+import { Table, ERDAction, ERDState } from "@/types/erd";
 import { TABLE_W, HEADER_H, ROW_H } from "@/lib/constants";
 import { getTableHeight, getFieldSuffix, getCollapsedColumnCount } from "@/lib/geometry";
 import FieldRow from "./FieldRow";
@@ -11,11 +12,10 @@ interface TableNodeProps {
   isDimmed: boolean;
   isSelected: boolean;
   hoveredField: ERDState["hoveredField"];
-  relationships: Relationship[];
   dispatch: React.Dispatch<ERDAction>;
 }
 
-export default function TableNode({
+export default memo(function TableNode({
   table,
   isHovered,
   isDragging,
@@ -27,17 +27,51 @@ export default function TableNode({
 }: TableNodeProps) {
   const h = getTableHeight(table);
   const collapsedCount = getCollapsedColumnCount(table);
-  const visibleColumns = table.columns.filter((c) => !c.collapsed);
+  const visibleColumns = useMemo(
+    () => table.columns.filter((c) => !c.collapsed),
+    [table.columns]
+  );
+
+  const onMouseEnter = useCallback(
+    () => dispatch({ type: "SET_HOVERED_TABLE", tableId: table.id }),
+    [dispatch, table.id]
+  );
+  const onMouseLeave = useCallback(
+    () => dispatch({ type: "SET_HOVERED_TABLE", tableId: null }),
+    [dispatch]
+  );
+  const onDoubleClick = useCallback(() => {
+    dispatch({ type: "SELECT_TABLE", tableId: table.id });
+    dispatch({ type: "SET_SIDEBAR", sidebar: { type: "edit-table", tableId: table.id } });
+  }, [dispatch, table.id]);
+
+  const onToggleCollapse = useCallback(
+    () => dispatch({ type: "TOGGLE_COLLAPSE", tableId: table.id }),
+    [dispatch, table.id]
+  );
+
+  const onExpandAll = useCallback(
+    (e: React.MouseEvent) => {
+      e.stopPropagation();
+      table.columns.forEach((col) => {
+        if (col.collapsed) {
+          dispatch({
+            type: "TOGGLE_COLUMN_COLLAPSE",
+            tableId: table.id,
+            columnId: col.id,
+          });
+        }
+      });
+    },
+    [dispatch, table.id, table.columns]
+  );
 
   return (
     <g
       style={{ cursor: isDragging ? "grabbing" : "grab" }}
-      onMouseEnter={() => dispatch({ type: "SET_HOVERED_TABLE", tableId: table.id })}
-      onMouseLeave={() => dispatch({ type: "SET_HOVERED_TABLE", tableId: null })}
-      onDoubleClick={() => {
-        dispatch({ type: "SELECT_TABLE", tableId: table.id });
-        dispatch({ type: "SET_SIDEBAR", sidebar: { type: "edit-table", tableId: table.id } });
-      }}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+      onDoubleClick={onDoubleClick}
       opacity={isDimmed ? 0.25 : 1}
     >
       {/* Drag shadow */}
@@ -109,7 +143,7 @@ export default function TableNode({
       <g
         onClick={(e) => {
           e.stopPropagation();
-          dispatch({ type: "TOGGLE_COLLAPSE", tableId: table.id });
+          onToggleCollapse();
         }}
         style={{ cursor: "pointer" }}
       >
@@ -158,62 +192,23 @@ export default function TableNode({
 
       {/* Field rows — only when expanded */}
       {!table.collapsed &&
-        visibleColumns.map((column, idx) => {
-          const fy = table.y + HEADER_H + idx * ROW_H;
-          const colSuffix = getFieldSuffix(column.name);
-          const isActiveField =
-            hoveredField?.tableId === table.id && hoveredField?.columnId === column.id;
-          const isJoinHighlight =
-            hoveredField !== null &&
-            colSuffix === hoveredField.suffix &&
-            !(hoveredField.tableId === table.id && hoveredField.columnId === column.id);
-
-          return (
-            <FieldRow
-              key={column.id}
-              column={column}
-              tableX={table.x}
-              fieldY={fy}
-              index={idx}
-              tableColor={table.color}
-              isActiveField={isActiveField}
-              isJoinHighlight={isJoinHighlight}
-              onMouseEnter={() =>
-                dispatch({
-                  type: "SET_HOVERED_FIELD",
-                  field: { tableId: table.id, columnId: column.id, suffix: colSuffix },
-                })
-              }
-              onMouseLeave={() => dispatch({ type: "SET_HOVERED_FIELD", field: null })}
-              onToggleCollapse={() =>
-                dispatch({
-                  type: "TOGGLE_COLUMN_COLLAPSE",
-                  tableId: table.id,
-                  columnId: column.id,
-                })
-              }
-            />
-          );
-        })}
+        visibleColumns.map((column, idx) => (
+          <MemoFieldRowWrapper
+            key={column.id}
+            column={column}
+            tableId={table.id}
+            tableX={table.x}
+            tableY={table.y}
+            tableColor={table.color}
+            idx={idx}
+            hoveredField={hoveredField}
+            dispatch={dispatch}
+          />
+        ))}
 
       {/* Collapsed columns summary row */}
       {!table.collapsed && collapsedCount > 0 && (
-        <g
-          style={{ cursor: "pointer" }}
-          onClick={(e) => {
-            e.stopPropagation();
-            // Expand all collapsed columns
-            table.columns.forEach((col) => {
-              if (col.collapsed) {
-                dispatch({
-                  type: "TOGGLE_COLUMN_COLLAPSE",
-                  tableId: table.id,
-                  columnId: col.id,
-                });
-              }
-            });
-          }}
-        >
+        <g style={{ cursor: "pointer" }} onClick={onExpandAll}>
           <rect
             x={table.x + 3}
             y={table.y + HEADER_H + visibleColumns.length * ROW_H}
@@ -236,6 +231,84 @@ export default function TableNode({
       )}
     </g>
   );
+});
+
+/** Wrapper that memoizes the callback props for each FieldRow */
+const MemoFieldRowWrapper = memo(function MemoFieldRowWrapper({
+  column,
+  tableId,
+  tableX,
+  tableY,
+  tableColor,
+  idx,
+  hoveredField,
+  dispatch,
+}: {
+  column: TableNodeProps["table"]["columns"][number];
+  tableId: string;
+  tableX: number;
+  tableY: number;
+  tableColor: string;
+  idx: number;
+  hoveredField: ERDState["hoveredField"];
+  dispatch: React.Dispatch<ERDAction>;
+}) {
+  const fy = tableY + HEADER_H + idx * ROW_H;
+  const colSuffix = getFieldSuffix(column.name);
+  const isActiveField =
+    hoveredField?.tableId === tableId && hoveredField?.columnId === column.id;
+  const isJoinHighlight =
+    hoveredField !== null &&
+    colSuffix === hoveredField.suffix &&
+    !(hoveredField.tableId === tableId && hoveredField.columnId === column.id);
+
+  const onMouseEnter = useCallback(
+    () =>
+      dispatch({
+        type: "SET_HOVERED_FIELD",
+        field: { tableId, columnId: column.id, suffix: colSuffix },
+      }),
+    [dispatch, tableId, column.id, colSuffix]
+  );
+  const onMouseLeave = useCallback(
+    () => dispatch({ type: "SET_HOVERED_FIELD", field: null }),
+    [dispatch]
+  );
+  const onToggleCollapse = useCallback(
+    () =>
+      dispatch({
+        type: "TOGGLE_COLUMN_COLLAPSE",
+        tableId,
+        columnId: column.id,
+      }),
+    [dispatch, tableId, column.id]
+  );
+
+  return (
+    <FieldRow
+      column={column}
+      tableX={tableX}
+      fieldY={fy}
+      index={idx}
+      tableColor={tableColor}
+      isActiveField={isActiveField}
+      isJoinHighlight={isJoinHighlight}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+      onToggleCollapse={onToggleCollapse}
+    />
+  );
+});
+
+interface TableNodeProps {
+  table: Table;
+  isHovered: boolean;
+  isDragging: boolean;
+  isRelated: boolean;
+  isDimmed: boolean;
+  isSelected: boolean;
+  hoveredField: ERDState["hoveredField"];
+  dispatch: React.Dispatch<ERDAction>;
 }
 
 const BORDER_COLOR = "#3a3a3c";

@@ -3,21 +3,29 @@ import { TABLE_W, ROW_H, HEADER_H } from "./constants";
 
 const COLLAPSED_ROW_H = 14;
 
+/** Count visible and collapsed columns in a single pass */
+export function getColumnCounts(table: Table): { visible: number; collapsed: number } {
+  let visible = 0;
+  let collapsed = 0;
+  for (const col of table.columns) {
+    if (col.collapsed) collapsed++;
+    else visible++;
+  }
+  return { visible, collapsed };
+}
+
 export function getVisibleColumnCount(table: Table): number {
-  return table.columns.filter((c) => !c.collapsed).length;
+  return getColumnCounts(table).visible;
 }
 
 export function getCollapsedColumnCount(table: Table): number {
-  return table.columns.filter((c) => c.collapsed).length;
+  return getColumnCounts(table).collapsed;
 }
 
 export function getTableHeight(table: Table): number {
   if (table.collapsed) return HEADER_H + 8;
-  const visibleCount = getVisibleColumnCount(table);
-  const collapsedCount = getCollapsedColumnCount(table);
-  // Collapsed columns get a single compact summary row if any exist
-  const collapsedHeight = collapsedCount > 0 ? COLLAPSED_ROW_H : 0;
-  return HEADER_H + visibleCount * ROW_H + collapsedHeight + 8;
+  const { visible, collapsed } = getColumnCounts(table);
+  return HEADER_H + visible * ROW_H + (collapsed > 0 ? COLLAPSED_ROW_H : 0) + 8;
 }
 
 /** Returns the visual index of a column among visible (non-collapsed) columns */

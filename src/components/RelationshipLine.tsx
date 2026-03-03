@@ -1,3 +1,4 @@
+import { memo, useCallback } from "react";
 import { Relationship, Table, ERDAction } from "@/types/erd";
 import { getConnectorPath } from "@/lib/geometry";
 import { COLORS } from "@/lib/constants";
@@ -12,7 +13,7 @@ interface RelationshipLineProps {
   dispatch: React.Dispatch<ERDAction>;
 }
 
-export default function RelationshipLine({
+export default memo(function RelationshipLine({
   relationship,
   index,
   fromTable,
@@ -28,6 +29,23 @@ export default function RelationshipLine({
     relationship.toColumnId
   );
 
+  const onMouseEnter = useCallback(
+    () => dispatch({ type: "SET_ACTIVE_RELATIONSHIP", index }),
+    [dispatch, index]
+  );
+  const onMouseLeave = useCallback(
+    () => dispatch({ type: "SET_ACTIVE_RELATIONSHIP", index: null }),
+    [dispatch]
+  );
+  const onClick = useCallback(
+    () =>
+      dispatch({
+        type: "SET_SIDEBAR",
+        sidebar: { type: "edit-relationship", relationshipId: relationship.id },
+      }),
+    [dispatch, relationship.id]
+  );
+
   // Don't render if either column is collapsed
   if (!connector) return null;
 
@@ -35,14 +53,9 @@ export default function RelationshipLine({
 
   return (
     <g
-      onMouseEnter={() => dispatch({ type: "SET_ACTIVE_RELATIONSHIP", index })}
-      onMouseLeave={() => dispatch({ type: "SET_ACTIVE_RELATIONSHIP", index: null })}
-      onClick={() =>
-        dispatch({
-          type: "SET_SIDEBAR",
-          sidebar: { type: "edit-relationship", relationshipId: relationship.id },
-        })
-      }
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
+      onClick={onClick}
       style={{ cursor: "pointer" }}
     >
       {/* Hit area */}
@@ -101,4 +114,4 @@ export default function RelationshipLine({
       )}
     </g>
   );
-}
+});
